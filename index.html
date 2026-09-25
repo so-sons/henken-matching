@@ -19,7 +19,10 @@
     <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#102a5c"/><text x="32" y="44" font-size="34" text-anchor="middle" fill="#ffd23f" font-weight="900">?</text></svg>
     <span id="brand-text"></span>
   </button>
-  <div class="topbar-right" id="topbar-status"></div>
+  <div class="topbar-right">
+    <span id="topbar-status"></span>
+    <button class="friends-btn" id="btn-friends" type="button" aria-label="フレンド">👥<span class="friends-label">フレンド</span><span class="friends-online" id="friends-online-dot" hidden></span><span class="friends-badge" id="friends-badge" hidden></span></button>
+  </div>
 </header>
 
 <main id="app">
@@ -55,6 +58,7 @@
           <tr><th>自由質問</th><td>偏見に関係なく何でも聞ける質問（例：<span id="rule-free-example"></span>）。出題者は「はい／部分的にはい／わからない／部分的にいいえ／いいえ」で答えます。<b>2〜5回</b>まで（ルームで設定）。</td></tr>
           <tr><th>お題</th><td>出題者が自由に入力します。ジャンル（例：<span id="rule-hint-example"></span>）を書いておくと回答者に表示されます。</td></tr>
           <tr><th>回答</th><td>お題が何かを答えます。出題者が「正解／惜しい／不正解」で判定（お題と同じ文字なら自動で正解）。当たれば回答者の勝ち、回答できる回数を使い切ったら出題者の勝ち。</td></tr>
+          <tr><th>フレンド</th><td>右上の「👥 フレンド」からフレンドコードで追加、個人チャット、ルームへの招待ができます。ルームの参加者一覧からも申請・ブロックできます。チャットは相手もサイトを開いているときだけ届き、フレンド一覧と会話はこの端末にだけ保存されます。</td></tr>
         </tbody></table>
         <p class="note">回答者が複数いるときは順番に1手ずつ（偏見・自由質問・回答のどれか1つ）。回数は回答者全員の合計です。各手番には制限時間があります（時間切れの質問は「どっちとも／わからない」扱い）。</p>
       </div>
@@ -146,6 +150,7 @@
           <button class="btn small" id="btn-topic-change" type="button">変更</button>
         </div>
       </div>
+      <div id="lobby-chat-slot"></div>
       <p class="muted" id="lobby-hint"></p>
       <div class="row">
         <button class="btn primary" id="btn-start" type="button" hidden>対戦開始</button>
@@ -223,16 +228,102 @@
       <button class="btn" id="btn-again-same" type="button" hidden>同じ出題者でもう一度</button>
       <button class="btn" id="btn-back-home" type="button">ホームへ</button>
     </div>
+    <div id="game-chat-slot"></div>
     <div class="log" id="game-log"></div>
   </section>
 </main>
+
+<!-- ===== ルームチャット（ロビー／ゲーム画面に移動して使う） ===== -->
+<div class="room-chat" id="room-chat" hidden>
+  <div class="field-label">💬 ルームチャット</div>
+  <ol class="chat-list" id="chat-list"></ol>
+  <p class="chat-empty muted" id="chat-empty">まだメッセージはありません</p>
+  <div class="guess-input-wrap">
+    <input id="chat-input" class="text" maxlength="100" placeholder="メッセージ（ルームの全員に見えます）" autocomplete="off">
+    <button class="btn" id="chat-send" type="button">送信</button>
+  </div>
+</div>
+
+<!-- ===== フレンド ===== -->
+<div class="modal-backdrop" id="friends-modal" hidden>
+  <div class="modal friends-modal" role="dialog" aria-modal="true" aria-labelledby="friends-title">
+    <div class="fm-head">
+      <h2 id="friends-title">フレンド</h2>
+      <button class="btn small" id="friends-close" type="button">閉じる</button>
+    </div>
+
+    <div id="friends-main">
+      <div class="my-card">
+        <div class="my-row">
+          <div>
+            <div class="muted small-label">あなたのフレンドコード</div>
+            <div class="my-code" id="social-code">……</div>
+          </div>
+          <button class="btn small" id="btn-copy-my-code" type="button">コピー</button>
+        </div>
+        <label class="my-row"><span class="muted small-label">名前</span><input id="social-name" class="text" maxlength="12" placeholder="例：こうじ" autocomplete="off"></label>
+        <div class="social-status" id="social-status"></div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">フレンドを追加</div>
+        <div class="guess-input-wrap">
+          <input id="add-code" class="text" maxlength="11" placeholder="相手のフレンドコード（例：ABCDE-23456）" autocomplete="off" autocapitalize="characters">
+          <button class="btn primary" id="btn-add-friend" type="button">申請</button>
+        </div>
+        <p class="muted fm-note">相手もサイトを開いているときに申請できます。ルームの参加者一覧からも申請できます。</p>
+        <p class="muted fm-note" id="outgoing-note" hidden></p>
+      </div>
+
+      <div class="field" id="req-section" hidden>
+        <div class="field-label">届いた申請</div>
+        <ul class="f-list" id="req-list"></ul>
+      </div>
+
+      <div class="field">
+        <div class="field-label">フレンド <span class="muted" id="friend-count"></span></div>
+        <ul class="f-list" id="friend-list"></ul>
+        <p class="muted fm-note" id="friend-empty">まだフレンドがいません。</p>
+      </div>
+
+      <details class="fm-details">
+        <summary>設定・ブロック</summary>
+        <label class="check-row"><input type="checkbox" id="set-accept-requests"> フレンド申請を受け付ける</label>
+        <label class="check-row"><input type="checkbox" id="set-accept-chat"> フレンドからのチャット・招待を受け取る</label>
+        <div id="block-section" hidden>
+          <div class="field-label">ブロック中</div>
+          <ul class="f-list" id="block-list"></ul>
+        </div>
+        <p class="muted fm-note">ブロックした相手からは、申請・チャット・招待が届かず、同じルームにも入れません。フレンド一覧と会話はこの端末にだけ保存されます。</p>
+      </details>
+    </div>
+
+    <div id="dm-view" hidden>
+      <div class="dm-head">
+        <button class="btn small" id="dm-back" type="button">← 戻る</button>
+        <div class="dm-who"><b id="dm-name"></b><span class="dm-state" id="dm-state"></span></div>
+      </div>
+      <ol class="dm-list" id="dm-list"></ol>
+      <p class="muted fm-note" id="dm-empty">メッセージはまだありません。相手もサイトを開いているときだけ届きます。</p>
+      <div class="guess-input-wrap">
+        <input id="dm-input" class="text" maxlength="300" placeholder="メッセージ" autocomplete="off">
+        <button class="btn primary" id="dm-send" type="button">送信</button>
+      </div>
+      <div class="dm-tools">
+        <button class="btn small primary" id="dm-invite" type="button" hidden>今のルームに招待</button>
+        <button class="btn small" id="dm-remove" type="button">フレンド解除</button>
+        <button class="btn small danger" id="dm-block" type="button">ブロック</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast" hidden></div>
 
 <footer class="foot" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
-<script>["config.js","app.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>["config.js","social.js","app.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
 <script>window.GAME_START();</script>
 </body>
 </html>

@@ -11,6 +11,9 @@ window.GAME_START = () => {
   const PEER_PREFIX = CFG.id + "-";
   const PLAYER_COLORS = ["#e0a800", "#1e88e5", "#e53976", "#2e9e4f"];
   const MAX_PLAYERS = CFG.maxPlayers || 4;
+  // フレンド機能（social.js）。init で起動するまでの仮の中身
+  let SOCIAL = { myCode: () => "", isFriend: () => false, isBlocked: () => false, hasPendingRequestTo: () => false, request() {}, block() {}, refresh() {} };
+  const validCode = (c) => (/^[A-Z2-9]{10}$/.test(String(c || "")) ? String(c) : "");
 
   // 回答の自動一致判定用（カタカナ→ひらがな、全角英数→半角、空白・記号を除去）
   const textNorm = (s) =>
@@ -150,7 +153,8 @@ window.GAME_START = () => {
       settled = true;
       vs.peer = peer; vs.isHost = true; vs.code = code; vs.me = 0;
       vs.host = {
-        players: [{ name, conn: null, connected: true, out: false }],
+        players: [{ name, conn: null, connected: true, out: false, code: SOCIAL.myCode() }],
+        chat: [],           // ルームチャット [{p, name, code, text, ts}]
         status: "lobby", setter: 0, topic: null,   // topic: { name, hint }（出題者だけが知っている。hint は回答者にも見える）
         opts: savedOpts(),
         log: [],            // [{k:"b"|"f", p, q, a} | {k:"g", p, q, r}] を時系列で（r: "ok"|"close"|"ng"|null=判定待ち）
@@ -193,7 +197,9 @@ window.GAME_START = () => {
       if (H.status !== "lobby") { hostSend(conn, { t: "error", msg: "対戦中のため参加できません。次のゲームまでお待ちください。" }); return; }
       if (H.players.filter((p) => p.connected).length >= MAX_PLAYERS) { hostSend(conn, { t: "error", msg: "満員です（最大" + MAX_PLAYERS + "人）" }); return; }
       const name = String(msg.name || "プレイヤー").slice(0, 12);
-      H.players.push({ name, conn, connected: true, out: false });
+      const code = validCode(msg.code);
+      if (code && SOCIAL.isBlocked(code)) { hostSend(conn, { t: "error", msg: "このルームには参加できません" }); setTimeout(() => { try { conn.close(); } catch {} }, 300); return; }
+      H.players.push({ name, conn, connected: true, out: false, code, chatTs: [] });
       hostSend(conn, { t: "welcome", you: H.players.length - 1 });
       hostEvent(`${name} が参加しました`);
       hostBroadcast();
@@ -206,6 +212,7 @@ window.GAME_START = () => {
     else if (msg.t === "answer") { if (pIdx === H.setter) hostAnswer(msg.k); }
     else if (msg.t === "judge") { if (pIdx === H.setter) hostJudge(msg.r); }
     else if (msg.t === "surrender") hostSurrender(pIdx);
+    else if (msg.t === "chat") hostChat(pIdx, msg.text);
   }
   function hostOnLeave(conn) {
     const H = vs.host; if (!H) return;
@@ -226,6 +233,23 @@ window.GAME_START = () => {
       if (H.status === "playing" && H.turn === i && H.phase === "ask") advanceTurn();
     }
     hostBroadcast();
+  }
+  function hostChat(pIdx, text) {
+    const H = vs.host; const p = H && H.players[pIdx]; if (!p) return;
+    text = String(text || "").replace(/\s+/g, " ").trim().slice(0, 100);
+    if (!text) return;
+    const now = Date.now(); p.chatTs = (p.chatTs || []).filter((t) => now - t < 5000);
+    if (p.chatTs.length >= 5) { errTo(pIdx, "送信が早すぎます。少し待ってください"); return; }
+    p.chatTs.push(now);
+    H.chat.push({ p: pIdx, name: p.name, code: p.code || "", text, ts: now });
+    while (H.chat.length > 40) H.chat.shift();
+    hostBroadcast();
+  }
+  // ブロックした相手をルームから出す（ホストのみ）
+  function hostKick(i) {
+    const H = vs.host; const p = H && H.players[i]; if (!p || !p.conn || i === 0) return;
+    hostSend(p.conn, { t: "error", msg: "ルームから退出しました" });
+    setTimeout(() => { try { p.conn.close(); } catch {} hostOnLeave(p.conn); }, 300);
   }
   function hostEvent(text) { const H = vs.host; H.events.push(text); if (H.events.length > 20) H.events.shift(); }
   const setterName = (pub) => (pub.players[pub.setter] ? pub.players[pub.setter].name : "出題者");
@@ -391,7 +415,8 @@ window.GAME_START = () => {
     const fin = (x) => (x === Infinity ? -1 : x);   // -1 = 無制限
     return {
       status: H.status, topicChosen: !!H.topic, setter: H.setter, hint: H.status !== "lobby" && H.topic ? H.topic.hint : "",
-      players: H.players.map((p) => ({ name: p.name, connected: p.connected, out: p.out })),
+      players: H.players.map((p) => ({ name: p.name, connected: p.connected, out: p.out, code: p.code || "" })),
+      chat: H.chat,
       opts: H.opts, log: H.log, bLeft: fin(H.bLeft), fLeft: H.fLeft, gLeft: H.gLeft, phase: H.phase,
       turn: H.turn, turnNo: H.turnNo, now: Date.now(), deadline: H.deadline,
       winner: H.winner, reason: H.reason, events: H.events,
@@ -542,7 +567,7 @@ window.GAME_START = () => {
         clearTimeout(timeout); joined = true;
         vs.peer = peer; vs.conn = conn; vs.isHost = false; vs.code = code;
         $("btn-join-room").disabled = false;
-        conn.send({ t: "join", name });
+        conn.send({ t: "join", name, code: SOCIAL.myCode() });
         conn.on("data", guestOnMessage);
         conn.on("close", onHostLost);
         conn.on("error", onHostLost);
@@ -558,16 +583,18 @@ window.GAME_START = () => {
     if (!msg || typeof msg !== "object") return;
     if (msg.t === "welcome") vs.me = msg.you | 0;
     else if (msg.t === "state") applyState(msg.s);
-    else if (msg.t === "error") { toast(msg.msg || "エラー"); lobbyStatus(msg.msg || ""); }
+    else if (msg.t === "error") { vs.lastErr = msg.msg || ""; vs.lastErrAt = Date.now(); toast(msg.msg || "エラー"); lobbyStatus(msg.msg || ""); }
   }
   function onHostLost() {
     if (!vs.peer) return;
-    toast("ホストとの接続が切れました");
+    // 直前にホストから理由（参加できない等）が届いていれば、そちらを出す
+    const why = Date.now() - (vs.lastErrAt || 0) < 3000 ? vs.lastErr : ""; vs.lastErr = "";
+    toast(why || "ホストとの接続が切れました");
     if (vs.pub && vs.pub.status === "playing") {
       stopTimer(); $("act-panel").hidden = true; $("answer-panel").hidden = true;
       $("turn-who").textContent = "接続終了"; $("turn-timer").textContent = "";
       vs.pub = null; try { vs.peer.destroy(); } catch {} vs.peer = null; vs.conn = null;
-    } else { leaveVersus(); openLobby(); lobbyStatus("ホストとの接続が切れました。"); }
+    } else { leaveVersus(); openLobby(); lobbyStatus(why || "ホストとの接続が切れました。"); }
   }
 
   // ---- shared
@@ -586,8 +613,10 @@ window.GAME_START = () => {
     vs.peer = null; vs.conn = null; vs.host = null; vs.pub = null; vs.isHost = false; vs.code = null; vs.me = -1; vs.myTopic = null;
     lastStatus = null;
     $("topbar-status").textContent = "";
+    $("room-chat").hidden = true; $("chat-list").innerHTML = ""; chatKey = "";
+    SOCIAL.refresh();
   }
-  function renderPlayers(ul, pub) {
+  function renderPlayers(ul, pub, withSocial) {
     ul.innerHTML = "";
     pub.players.forEach((p, i) => {
       const li = el("li", (i === vs.me ? "me " : "") + (pub.status === "playing" && pub.turn === i && pub.phase === "ask" ? "turn " : "") + (!p.connected || p.out ? "offline" : ""));
@@ -596,14 +625,27 @@ window.GAME_START = () => {
       const setter = i === pub.setter;
       const tag = !p.connected ? "切断" : p.out ? "降参" : setter ? (i === vs.me ? "出題者（あなた）" : "出題者") : i === vs.me ? "あなた" : "";
       if (tag) li.appendChild(el("span", "ptag", tag));
+      if (withSocial) { const a = socialActions(p); if (a) li.appendChild(a); }
       ul.appendChild(li);
     });
+  }
+  // 他のプレイヤーへのフレンド申請・ブロックのボタン
+  function socialActions(p) {
+    if (!p.code || p.code === SOCIAL.myCode() || !p.connected) return null;
+    const box = el("span", "p-act");
+    if (SOCIAL.isFriend(p.code)) box.appendChild(el("span", "p-friend", "フレンド"));
+    else if (SOCIAL.hasPendingRequestTo(p.code)) box.appendChild(el("span", "p-friend", "申請中"));
+    else { const b = el("button", "btn small", "＋フレンド"); b.type = "button"; b.addEventListener("click", () => SOCIAL.request(p.code, p.name)); box.appendChild(b); }
+    const bl = el("button", "btn small danger", "ブロック"); bl.type = "button";
+    bl.addEventListener("click", () => armConfirm(bl, "本当に？", () => SOCIAL.block(p.code, p.name)));
+    box.appendChild(bl);
+    return box;
   }
   const optsSummary = (o) => [
     o.bMax ? `偏見 ${o.bMax}回` : "偏見 無制限", `自由質問 ${o.fMax}回`, `回答 ${o.gMax}回`, o.turnSec ? `1手 ${o.turnSec}秒` : "制限時間なし",
   ].join("・");
   function renderLobby(pub) {
-    renderPlayers($("lobby-players"), pub);
+    renderPlayers($("lobby-players"), pub, true);
     // 設定
     $("room-options").hidden = false;
     $("room-options-host").hidden = !vs.isHost;
@@ -633,11 +675,45 @@ window.GAME_START = () => {
   function stopTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
   const leftText = (n, max) => (n < 0 ? "∞" : `${n}/${max}`);
 
+  // ルームチャット：ロビーとゲーム画面の置き場所へ移動して表示。ブロック中の相手の発言は出さない
+  let chatKey = "";
+  function renderChat(pub) {
+    const box = $("room-chat");
+    const slot = $(pub.status === "lobby" ? "lobby-chat-slot" : "game-chat-slot");
+    if (box.parentNode !== slot) slot.appendChild(box);
+    box.hidden = false;
+    const chat = pub.chat || [];
+    const key = chat.length + ":" + (chat.length ? chat[chat.length - 1].ts : 0) + ":" + chat.map((m) => (SOCIAL.isBlocked(m.code) ? "b" : "")).join("");
+    if (key === chatKey) return;
+    chatKey = key;
+    const ol = $("chat-list"); const atBottom = ol.scrollTop + ol.clientHeight >= ol.scrollHeight - 20;
+    ol.innerHTML = "";
+    chat.filter((m) => !SOCIAL.isBlocked(m.code)).forEach((m) => {
+      const li = el("li");
+      const nm = el("span", "cn", m.name); nm.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
+      li.append(nm, document.createTextNode(m.text));
+      ol.appendChild(li);
+    });
+    $("chat-empty").hidden = ol.children.length > 0;
+    if (atBottom || !ol.dataset.init) { ol.scrollTop = ol.scrollHeight; ol.dataset.init = "1"; }
+  }
+  function sendChat() {
+    const input = $("chat-input");
+    const text = input.value.replace(/\s+/g, " ").trim().slice(0, 100);
+    if (!text || !vs.pub) return;
+    input.value = "";
+    send({ t: "chat", text }, () => hostChat(vs.me, text));
+  }
+
   function applyState(pub) {
     vs.pub = pub;
+    // ブロック中の相手がホストのルームには居続けない
+    if (!vs.isHost && pub.players[0] && SOCIAL.isBlocked(pub.players[0].code)) { leaveVersus(); openLobby(); lobbyStatus("ブロック中の相手のルームだったため退出しました。"); return; }
+    renderChat(pub);
     if (pub.status === "lobby") {
       if (lastStatus && lastStatus !== "lobby") { stopTimer(); showScreen("lobby"); enterRoomView(); }
       renderLobby(pub);
+      SOCIAL.refresh();   // 招待ボタンの出し分け
       lastStatus = "lobby";
       return;
     }
@@ -758,6 +834,13 @@ window.GAME_START = () => {
       if (pub.hint) info.appendChild(el("div", "result-kana", "ジャンル：" + pub.hint));
       card.appendChild(info);
     }
+    const others = pub.players.filter((p, i) => i !== vs.me && p.code && p.code !== SOCIAL.myCode());
+    if (others.length) {
+      const box = el("div", "end-social");
+      box.appendChild(el("div", "muted", "一緒に遊んだ人"));
+      others.forEach((p) => { const r = el("div", "row"); r.appendChild(el("span", null, p.name)); const a = socialActions(p); if (a) r.appendChild(a); box.appendChild(r); });
+      card.appendChild(box);
+    }
     card.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
     shareText = [`${CFG.title}`, verdict, pub.answer ? `お題：${pub.answer}` : "",
@@ -854,11 +937,28 @@ window.GAME_START = () => {
   });
   const readOpts = () => ({ bMax: $("room-bias").value, fMax: $("room-free").value, gMax: $("room-guess").value, turnSec: $("room-turn-seconds").value });
   ["room-bias", "room-free", "room-guess", "room-turn-seconds"].forEach((id) => $(id).addEventListener("change", () => { if (vs.isHost) hostSetOptions(readOpts()); }));
+  $("chat-send").addEventListener("click", sendChat);
+  $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendChat(); } });
   $("setter-select").addEventListener("change", () => { if (vs.isHost) hostSetSetter(+$("setter-select").value); });
   window.addEventListener("beforeunload", () => { try { vs.peer && vs.peer.destroy(); } catch {} });
 
   // ------------------------------------------------------------------ init
   applyConfigText();
+  SOCIAL = window.SOCIAL_START({
+    el, toast, copyText,
+    getName: () => vs.name || "プレイヤー",
+    setName: (n) => { n = String(n || "").trim().slice(0, 12) || "プレイヤー"; vs.name = n; try { localStorage.setItem(NICK_KEY, n); } catch {} $("nickname").value = n; return n; },
+    // 招待できるのはロビーにいるときだけ（対戦中は参加できないため）
+    roomCode: () => (vs.code && vs.pub && vs.pub.status === "lobby" ? vs.code : ""),
+    joinByCode: (code) => { leaveVersus(); openLobby(code); joinRoom(); },
+    onBlock: (code) => {
+      if (vs.isHost && vs.host) { const i = vs.host.players.findIndex((p, k) => k > 0 && p.code === code && p.connected); if (i > 0) hostKick(i); }
+      else if (vs.pub && vs.pub.players[0] && vs.pub.players[0].code === code) { leaveVersus(); openLobby(); lobbyStatus("ブロックした相手のルームから退出しました。"); return; }
+      if (vs.pub) { chatKey = ""; renderChat(vs.pub); }
+    },
+    // フレンド状態が変わったら参加者一覧のボタンを更新
+    onChange: () => { if (vs.pub && vs.pub.status === "lobby") renderPlayers($("lobby-players"), vs.pub, true); },
+  });
   const roomParam = new URLSearchParams(location.search).get("room");
   if (roomParam && /^\d{6}$/.test(roomParam)) openLobby(roomParam);
 };
