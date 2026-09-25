@@ -4,8 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>偏見ゲッサー</title>
-<meta name="description" content="「〇〇そうですか？」と偏見で質問してお題のキャラを当てる対戦ゲーム。">
-<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="description" content="「〇〇そうですか？」と偏見で質問して、出題者が決めたお題を当てる対戦ゲーム。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
@@ -23,15 +22,7 @@
   <div class="topbar-right" id="topbar-status"></div>
 </header>
 
-<section id="gate" class="gate" hidden>
-  <div class="gate-card">
-    <div class="gate-icon">🔒</div>
-    <h2>招待リンクが必要です</h2>
-    <p id="gate-msg"></p>
-  </div>
-</section>
-
-<main id="app" hidden>
+<main id="app">
 
   <!-- ===== ホーム ===== -->
   <section id="screen-home" class="screen">
@@ -41,7 +32,7 @@
       <div class="hero-demo" aria-hidden="true">
         <span class="bias-bubble">「<b id="hero-example"></b>」そうですか？</span>
       </div>
-      <p class="lead">出題者がこっそりお題の<span class="item-label"></span>を1人決めます。回答者は<b>「〇〇そうですか？」</b>と<b>偏見</b>をぶつけて絞り込み、正体を当てたら勝ち！</p>
+      <p class="lead">出題者がこっそりお題（キャラ・有名人・身近な人など何でもOK）を1つ決めます。回答者は<b>「〇〇そうですか？」</b>と<b>偏見</b>をぶつけて絞り込み、正体を当てたら勝ち！</p>
     </div>
 
     <div class="mode-grid one">
@@ -54,7 +45,6 @@
 
     <div class="share-row">
       <button class="btn small" id="btn-copy-app-link" type="button">🔗 友達に共有するリンクをコピー</button>
-      <span class="muted">このゲームはカギ付きリンクからしか開けません</span>
     </div>
 
     <details class="panel" open>
@@ -63,7 +53,8 @@
         <table class="rules-table"><tbody>
           <tr><th>偏見</th><td><b>「　」そうですか？</b> の空欄を埋めて質問。出題者は「めっちゃそう／ちょっとそう／どっちとも／あんまり／ぜんぜん」で答えます。回数はルームで設定（無制限もOK）。</td></tr>
           <tr><th>自由質問</th><td>偏見に関係なく何でも聞ける質問（例：<span id="rule-free-example"></span>）。出題者は「はい／部分的にはい／わからない／部分的にいいえ／いいえ」で答えます。<b>2〜5回</b>まで（ルームで設定）。</td></tr>
-          <tr><th>回答</th><td>お題の<span class="item-label"></span>名を答えます。当たれば回答者の勝ち。回答できる回数を使い切ったら出題者の勝ち。</td></tr>
+          <tr><th>お題</th><td>出題者が自由に入力します。ジャンル（例：<span id="rule-hint-example"></span>）を書いておくと回答者に表示されます。</td></tr>
+          <tr><th>回答</th><td>お題が何かを答えます。出題者が「正解／惜しい／不正解」で判定（お題と同じ文字なら自動で正解）。当たれば回答者の勝ち、回答できる回数を使い切ったら出題者の勝ち。</td></tr>
         </tbody></table>
         <p class="note">回答者が複数いるときは順番に1手ずつ（偏見・自由質問・回答のどれか1つ）。回数は回答者全員の合計です。各手番には制限時間があります（時間切れの質問は「どっちとも／わからない」扱い）。</p>
       </div>
@@ -134,16 +125,16 @@
       <div class="field topic-field" id="topic-field" hidden>
         <div class="field-label">あなたのお題（相手には見えません）</div>
         <div class="topic-picker" id="topic-picker">
-          <input id="topic-input" class="text" placeholder="お題にする名前を入力" autocomplete="off" autocapitalize="off">
-          <ul class="suggest" id="topic-suggest" hidden></ul>
+          <input id="topic-input" class="text" maxlength="40" autocomplete="off">
+          <input id="hint-input" class="text" maxlength="30" autocomplete="off">
+          <button class="btn primary" id="btn-topic-set" type="button">このお題に決める</button>
         </div>
         <div class="topic-chosen" id="topic-chosen" hidden>
           <span class="topic-badge">お題</span>
           <b id="topic-name"></b>
-          <button class="btn small" id="btn-topic-random" type="button">ランダム</button>
+          <span class="muted" id="topic-hint"></span>
           <button class="btn small" id="btn-topic-change" type="button">変更</button>
         </div>
-        <button class="btn small" id="btn-topic-random-2" type="button">🎲 メインキャラからランダムに決める</button>
       </div>
       <p class="muted" id="lobby-hint"></p>
       <div class="row">
@@ -170,6 +161,7 @@
     </div>
 
     <ul class="players inline" id="game-players"></ul>
+    <div class="genre" id="genre" hidden></div>
 
     <!-- 出題者：質問に答える -->
     <div class="qa-panel setter" id="answer-panel" hidden>
@@ -200,12 +192,9 @@
         </div>
       </div>
       <div class="act-body" id="act-guess" hidden>
-        <div class="guess-area">
-          <div class="guess-input-wrap">
-            <input id="guess-input" class="text" autocomplete="off" autocapitalize="off">
-            <button class="btn primary" id="guess-send" type="button">回答</button>
-          </div>
-          <ul class="suggest" id="guess-suggest" hidden></ul>
+        <div class="guess-input-wrap">
+          <input id="guess-input" class="text" maxlength="40" autocomplete="off" autocapitalize="off">
+          <button class="btn primary" id="guess-send" type="button">回答</button>
         </div>
       </div>
       <p class="act-note muted" id="act-note"></p>
@@ -233,6 +222,7 @@
 <footer class="foot" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
-<script>["config.js","app.js","loader.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>["config.js","app.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>window.GAME_START();</script>
 </body>
 </html>

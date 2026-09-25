@@ -386,3 +386,11 @@ select.text { appearance: auto; }
 .qa-item.bias .qa-no { color: #fff; background: var(--navy-2); padding: 1px 7px; border-radius: 999px; }
 .qa-item.free { border-left: 6px solid #2e9e4f; }
 .qa-item.free .qa-no { color: #fff; background: #2e9e4f; padding: 1px 7px; border-radius: 999px; }
+
+/* お題を自由入力にした分 */
+.topic-picker { display: flex; flex-direction: column; gap: 8px; }
+.topic-chosen { flex-wrap: wrap; }
+.genre { display: inline-block; font-size: 13px; font-weight: 800; color: var(--navy); background: #e8efff; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 12px; margin-bottom: 10px; }
+.qa-buttons.judge { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 560px) { .qa-buttons.judge { grid-template-columns: repeat(3, 1fr); } }
+.result-topic { padding: 4px 0 8px; }
