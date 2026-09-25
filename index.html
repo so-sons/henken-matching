@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>偏見ゲッサー</title>
+<meta name="description" content="「〇〇そうですか？」と偏見で質問してお題のキャラを当てる対戦ゲーム。">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
+<!-- 更新がブラウザのキャッシュで反映されない問題を避けるため、自前のファイルは毎回取り直す（?v=時刻） -->
+<script>window.__v = "?v=" + Math.floor(Date.now() / 60000); document.write('<link rel="stylesheet" href="style.css' + window.__v + '">');</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23102a5c'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%23ffd23f' font-weight='900'%3E%3F%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="brand" id="brand-btn" type="button" aria-label="ホームへ">
+    <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#102a5c"/><text x="32" y="44" font-size="34" text-anchor="middle" fill="#ffd23f" font-weight="900">?</text></svg>
+    <span id="brand-text"></span>
+  </button>
+  <div class="topbar-right" id="topbar-status"></div>
+</header>
+
+<section id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <div class="gate-icon">🔒</div>
+    <h2>招待リンクが必要です</h2>
+    <p id="gate-msg"></p>
+  </div>
+</section>
+
+<main id="app" hidden>
+
+  <!-- ===== ホーム ===== -->
+  <section id="screen-home" class="screen">
+    <div class="hero">
+      <div class="hero-kicker" id="hero-kicker"></div>
+      <h1 id="hero-title"></h1>
+      <div class="hero-demo" aria-hidden="true">
+        <span class="bias-bubble">「<b id="hero-example"></b>」そうですか？</span>
+      </div>
+      <p class="lead">出題者がこっそりお題の<span class="item-label"></span>を1人決めます。回答者は<b>「〇〇そうですか？」</b>と<b>偏見</b>をぶつけて絞り込み、正体を当てたら勝ち！</p>
+    </div>
+
+    <div class="mode-grid one">
+      <button class="mode-card accent" id="btn-versus" type="button">
+        <span class="mode-icon">🗯️</span>
+        <span class="mode-title">ルームで遊ぶ</span>
+        <span class="mode-desc">ルームコードで友達と対戦（2〜4人）。出題者を決めて、ほかの人が回答者になります。</span>
+      </button>
+    </div>
+
+    <div class="share-row">
+      <button class="btn small" id="btn-copy-app-link" type="button">🔗 友達に共有するリンクをコピー</button>
+      <span class="muted">このゲームはカギ付きリンクからしか開けません</span>
+    </div>
+
+    <details class="panel" open>
+      <summary>遊び方</summary>
+      <div class="panel-body rules">
+        <table class="rules-table"><tbody>
+          <tr><th>偏見</th><td><b>「　」そうですか？</b> の空欄を埋めて質問。出題者は「めっちゃそう／ちょっとそう／どっちとも／あんまり／ぜんぜん」で答えます。回数はルームで設定（無制限もOK）。</td></tr>
+          <tr><th>自由質問</th><td>偏見に関係なく何でも聞ける質問（例：<span id="rule-free-example"></span>）。出題者は「はい／部分的にはい／わからない／部分的にいいえ／いいえ」で答えます。<b>2〜5回</b>まで（ルームで設定）。</td></tr>
+          <tr><th>回答</th><td>お題の<span class="item-label"></span>名を答えます。当たれば回答者の勝ち。回答できる回数を使い切ったら出題者の勝ち。</td></tr>
+        </tbody></table>
+        <p class="note">回答者が複数いるときは順番に1手ずつ（偏見・自由質問・回答のどれか1つ）。回数は回答者全員の合計です。各手番には制限時間があります（時間切れの質問は「どっちとも／わからない」扱い）。</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===== 対戦ロビー ===== -->
+  <section id="screen-lobby" class="screen" hidden>
+    <h2>ルーム</h2>
+    <div class="field">
+      <label class="field-label" for="nickname">ニックネーム</label>
+      <input id="nickname" class="text" maxlength="12" placeholder="例：まもる" autocomplete="off">
+    </div>
+
+    <div class="lobby-grid" id="lobby-choice">
+      <div class="card">
+        <h3>ルームを作成</h3>
+        <p class="muted">あなたがホストになります。回数などの設定はルームの中でも変えられます。</p>
+        <button class="btn primary" id="btn-create-room" type="button">ルームを作成</button>
+      </div>
+      <div class="card">
+        <h3>ルームに参加</h3>
+        <p class="muted">ホストから聞いた6桁のコードを入力。</p>
+        <input id="join-code" class="text code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="off">
+        <button class="btn" id="btn-join-room" type="button">参加する</button>
+      </div>
+    </div>
+
+    <div class="card" id="lobby-room" hidden>
+      <div class="room-code-box">
+        <div class="muted">ルームコード</div>
+        <div class="room-code" id="room-code-display">------</div>
+        <button class="btn small" id="btn-copy-code" type="button">コードをコピー</button>
+        <button class="btn small" id="btn-copy-link" type="button">招待リンクをコピー</button>
+      </div>
+      <div class="field">
+        <div class="field-label">参加者</div>
+        <ul class="players" id="lobby-players"></ul>
+      </div>
+      <div class="field" id="room-options" hidden>
+        <div class="field-label">ルールの設定</div>
+        <p class="muted" id="room-options-summary"></p>
+        <div id="room-options-host" hidden>
+          <div class="opt-grid four">
+            <label class="opt"><span>偏見の回数</span>
+              <select id="room-bias" class="text">
+                <option value="0">無制限</option><option value="10">10回</option><option value="15">15回</option><option value="20">20回</option><option value="30">30回</option>
+              </select></label>
+            <label class="opt"><span>自由質問の回数</span>
+              <select id="room-free" class="text">
+                <option value="2">2回</option><option value="3">3回</option><option value="4">4回</option><option value="5">5回</option>
+              </select></label>
+            <label class="opt"><span>回答できる回数</span>
+              <select id="room-guess" class="text">
+                <option value="1">1回</option><option value="2">2回</option><option value="3">3回</option><option value="4">4回</option><option value="5">5回</option>
+              </select></label>
+            <label class="opt"><span>1手の制限時間</span>
+              <select id="room-turn-seconds" class="text">
+                <option value="30">30秒</option><option value="60">60秒</option><option value="90">90秒</option><option value="120">120秒</option><option value="0">なし</option>
+              </select></label>
+          </div>
+        </div>
+      </div>
+      <div class="field" id="setter-field" hidden>
+        <div class="field-label">出題者（交代できます）</div>
+        <select id="setter-select" class="text"></select>
+      </div>
+      <div class="field topic-field" id="topic-field" hidden>
+        <div class="field-label">あなたのお題（相手には見えません）</div>
+        <div class="topic-picker" id="topic-picker">
+          <input id="topic-input" class="text" placeholder="お題にする名前を入力" autocomplete="off" autocapitalize="off">
+          <ul class="suggest" id="topic-suggest" hidden></ul>
+        </div>
+        <div class="topic-chosen" id="topic-chosen" hidden>
+          <span class="topic-badge">お題</span>
+          <b id="topic-name"></b>
+          <button class="btn small" id="btn-topic-random" type="button">ランダム</button>
+          <button class="btn small" id="btn-topic-change" type="button">変更</button>
+        </div>
+        <button class="btn small" id="btn-topic-random-2" type="button">🎲 メインキャラからランダムに決める</button>
+      </div>
+      <p class="muted" id="lobby-hint"></p>
+      <div class="row">
+        <button class="btn primary" id="btn-start" type="button" hidden>対戦開始</button>
+        <button class="btn" id="btn-leave-lobby" type="button">退出</button>
+      </div>
+    </div>
+    <p class="status-line" id="lobby-status"></p>
+  </section>
+
+  <!-- ===== ゲーム ===== -->
+  <section id="screen-game" class="screen" hidden>
+    <div class="game-head">
+      <div>
+        <div class="game-mode">偏見ゲッサー</div>
+        <div class="counters" id="counters"></div>
+      </div>
+      <div class="head-right">
+        <div class="turn-box" id="turn-box">
+          <div class="turn-who" id="turn-who"></div>
+          <div class="turn-timer" id="turn-timer"></div>
+        </div>
+      </div>
+    </div>
+
+    <ul class="players inline" id="game-players"></ul>
+
+    <!-- 出題者：質問に答える -->
+    <div class="qa-panel setter" id="answer-panel" hidden>
+      <div class="field-label" id="answer-kind"></div>
+      <div class="qa-pending" id="answer-q"></div>
+      <div class="qa-buttons" id="answer-buttons"></div>
+    </div>
+
+    <!-- 回答者：手番のアクション -->
+    <div class="qa-panel" id="act-panel" hidden>
+      <div class="act-tabs" role="tablist">
+        <button type="button" class="act-tab" data-act="bias">🗯️ 偏見<small id="tab-bias-left"></small></button>
+        <button type="button" class="act-tab" data-act="free">❓ 自由質問<small id="tab-free-left"></small></button>
+        <button type="button" class="act-tab" data-act="guess">🎯 回答<small id="tab-guess-left"></small></button>
+      </div>
+      <div class="act-body" id="act-bias">
+        <div class="bias-input">
+          <span class="bq">「</span>
+          <input id="bias-input" class="text" maxlength="60" autocomplete="off">
+          <span class="bq">」そうですか？</span>
+        </div>
+        <button class="btn primary act-send" id="bias-send" type="button">偏見をぶつける</button>
+      </div>
+      <div class="act-body" id="act-free" hidden>
+        <div class="guess-input-wrap">
+          <input id="free-input" class="text" maxlength="80" autocomplete="off">
+          <button class="btn primary" id="free-send" type="button">質問</button>
+        </div>
+      </div>
+      <div class="act-body" id="act-guess" hidden>
+        <div class="guess-area">
+          <div class="guess-input-wrap">
+            <input id="guess-input" class="text" autocomplete="off" autocapitalize="off">
+            <button class="btn primary" id="guess-send" type="button">回答</button>
+          </div>
+          <ul class="suggest" id="guess-suggest" hidden></ul>
+        </div>
+      </div>
+      <p class="act-note muted" id="act-note"></p>
+    </div>
+
+    <!-- 終了後の正解カード -->
+    <div class="answer-card" id="answer-card" hidden></div>
+
+    <ol class="qa-log" id="qa-log"></ol>
+    <p class="board-empty" id="qa-empty">まだ質問がありません。</p>
+
+    <div class="row game-controls">
+      <button class="btn danger" id="btn-surrender" type="button">降参</button>
+      <button class="btn" id="btn-copy-result" type="button" hidden>結果をコピー</button>
+      <button class="btn primary" id="btn-again" type="button" hidden>次へ（出題者を交代）</button>
+      <button class="btn" id="btn-again-same" type="button" hidden>同じ出題者でもう一度</button>
+      <button class="btn" id="btn-back-home" type="button">ホームへ</button>
+    </div>
+    <div class="log" id="game-log"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<footer class="foot" id="foot"></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
+<script>["config.js","app.js","loader.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+</body>
+</html>
