@@ -1,5 +1,5 @@
 /* ================================================================
-   偏見ゲッサー スタイル（イナゲッサーと共通のベース＋偏見ゲッサー用の追加分）
+   偏見マッチング スタイル（イナゲッサーと共通のベース＋偏見マッチング用の追加分）
    ・ネイビー × イナズマイエロー
    ・推理結果は「カード + 属性タイル」で表示（スマホでも横スクロールなし）
    ================================================================ */
@@ -353,7 +353,7 @@ select.text { appearance: auto; }
 .qa-a.pending { background: var(--panel-2); color: var(--muted); }
 
 /* ================================================================
-   偏見ゲッサー
+   偏見マッチング
    ================================================================ */
 .mode-grid.one { grid-template-columns: 1fr; }
 .bias-bubble { display: inline-block; background: var(--panel); border: 2px solid var(--navy); border-radius: 18px; padding: 8px 14px; font-weight: 800; box-shadow: var(--shadow-s); position: relative; }
