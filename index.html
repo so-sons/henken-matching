@@ -57,6 +57,7 @@
           <tr><th>偏見</th><td><b>「　」そうですか？</b> の空欄を埋めて質問。出題者は「めっちゃそう／ちょっとそう／どっちとも／あんまり／ぜんぜん」で答えます。回数はルームで設定（無制限もOK）。</td></tr>
           <tr><th>自由質問</th><td>偏見に関係なく何でも聞ける質問（例：<span id="rule-free-example"></span>）。出題者は「はい／部分的にはい／わからない／部分的にいいえ／いいえ」で答えます。<b>2〜5回</b>まで（ルームで設定）。</td></tr>
           <tr><th>お題</th><td>出題者が自由に入力します。ジャンル（例：<span id="rule-hint-example"></span>）を書いておくと回答者に表示されます。</td></tr>
+          <tr><th>1対1／複数人</th><td>ルームを作るときに選べます。複数人は出題者1人 vs 回答者 最大7人で、順番に1手ずつ。最初に当てた人の勝ち。回数は「1人ずつ」（回答を使い切った人はその試合から抜ける）か「全員合計」をルームで選べます。ランダム対戦も1対1／複数人（3〜5人）を選べます。</td></tr>
           <tr><th>回答</th><td>お題が何かを答えます。出題者が「正解／惜しい／不正解」で判定（お題と同じ文字なら自動で正解）。当たれば回答者の勝ち、回答できる回数を使い切ったら出題者の勝ち。</td></tr>
           <tr><th>フレンド</th><td>右上の「👥 フレンド」からフレンドコードで追加、個人チャット、ルームへの招待ができます。ルームの参加者一覧からも申請・ブロックできます。チャットは相手もサイトを開いているときだけ届き、フレンド一覧と会話はこの端末にだけ保存されます。</td></tr>
         </tbody></table>
@@ -77,6 +78,10 @@
       <div class="card">
         <h3>ルームを作成</h3>
         <p class="muted">あなたがホストになります。回数などの設定はルームの中でも変えられます。</p>
+        <div class="seg room-mode-seg" role="radiogroup">
+          <label><input type="radio" name="roommode" value="duel" checked><span>1対1<small>出題者と回答者1人</small></span></label>
+          <label><input type="radio" name="roommode" value="multi"><span>複数人<small>出題者1人 vs 回答者 最大7人</small></span></label>
+        </div>
         <button class="btn primary" id="btn-create-room" type="button">ルームを作成</button>
       </div>
       <div class="card">
@@ -89,7 +94,11 @@
 
     <div class="card match-card" id="lobby-match">
       <h3>ランダム対戦</h3>
-      <p class="muted">コード不要。同じタイミングで相手を探している人と自動でマッチして、2人のルームに入ります。最初の出題者はランダム、続けて遊ぶと交互になります。</p>
+      <p class="muted">コード不要。相手を探している人と自動でマッチしてルームに入ります。</p>
+      <div class="seg room-mode-seg" role="radiogroup">
+        <label><input type="radio" name="matchmode" value="duel" checked><span>1対1<small>2人。出題者は最初ランダム、あとは交互</small></span></label>
+        <label><input type="radio" name="matchmode" value="multi"><span>複数人<small>3〜5人。出題者はランダムで決まり、試合ごとに交代</small></span></label>
+      </div>
       <div class="row">
         <button class="btn primary" id="btn-match" type="button">相手を探す</button>
         <button class="btn" id="btn-match-cancel" type="button" hidden>やめる</button>
@@ -124,6 +133,10 @@
             <label class="opt"><span>回答できる回数</span>
               <select id="room-guess" class="text">
                 <option value="1">1回</option><option value="2">2回</option><option value="3">3回</option><option value="4">4回</option><option value="5">5回</option>
+              </select></label>
+            <label class="opt" id="room-per-field" hidden><span>回数の数え方</span>
+              <select id="room-per" class="text">
+                <option value="each">1人ずつ</option><option value="total">全員合計</option>
               </select></label>
             <label class="opt"><span>1手の制限時間</span>
               <select id="room-turn-seconds" class="text">

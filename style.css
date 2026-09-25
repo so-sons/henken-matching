@@ -457,3 +457,12 @@ select.text { appearance: auto; }
 .chat-list .cn { font-weight: 800; margin-right: 6px; color: var(--c, var(--text)); }
 .chat-list li.sys { color: var(--muted); font-size: 12px; }
 .chat-empty { font-size: 12px; margin: 4px 0 8px; }
+
+/* 1対1／複数人・成績 */
+.room-mode-seg { margin: 8px 0; }
+.p-stats { font-size: 12px; font-weight: 800; color: var(--navy-2); margin-left: 6px; }
+.p-left { font-size: 11px; font-weight: 800; color: var(--muted); background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 6px; }
+.counter-label { font-size: 12px; font-weight: 800; color: var(--navy-2); align-self: center; }
+.end-stats { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 4px; }
+.end-stats .row { font-weight: 800; }
+.end-stats .row.me { color: var(--navy-2); }

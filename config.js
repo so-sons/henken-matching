@@ -23,5 +23,5 @@ window.GAME_CONFIG = {
   hintExample: "アニメキャラ",             // ジャンルの例
 
   // --- ルール ---
-  maxPlayers: 4,
+  maxPlayers: 8,   // 複数人モードの最大人数（1対1は2人）
 };
