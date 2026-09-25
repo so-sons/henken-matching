@@ -62,7 +62,14 @@ window.GAME_START = () => {
     $("guess-input").placeholder = "お題は誰（何）？";
     $("topic-input").placeholder = "お題（例：" + (CFG.topicExample || "") + "）";
     $("hint-input").placeholder = "ジャンル・任意（例：" + (CFG.hintExample || "") + "）※回答者に見えます";
-    $("foot").textContent = "";
+    const foot = $("foot"); foot.textContent = "";
+    if (CFG.support && CFG.support.url) {
+      const p = el("p", "support");
+      const a = el("a", "btn small", CFG.support.label || "開発者を応援する"); a.href = CFG.support.url; a.target = "_blank"; a.rel = "noopener";
+      p.appendChild(a);
+      if (CFG.support.note) p.appendChild(el("span", "muted", CFG.support.note));
+      foot.appendChild(p);
+    }
   }
   // --------------------------------------------------------------- screens
   function showScreen(name) {

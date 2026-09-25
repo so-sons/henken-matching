@@ -13,6 +13,9 @@ window.GAME_CONFIG = {
   kicker: "HENKEN MATCHING",
   heroTitle: "「〇〇そうですか？」\n偏見でお題を当てよう",
 
+  // --- 投げ銭（ページ下部に表示。不要なら消す） ---
+  support: { label: "☕ OFUSEで開発者を応援する", url: "https://ofuse.me/ea96441a", note: "サイトの維持・機能追加の励みになります" },
+
   // --- 入力欄の例 ---
   biasExample: "淫夢知って",   // 「　」そうですか？ の空欄の例
   freeExample: "中学生ですか？",           // 自由質問の例
