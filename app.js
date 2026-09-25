@@ -803,7 +803,8 @@ window.GAME_START = () => {
   const sendSurrender = () => send({ t: "surrender" }, () => hostSurrender(vs.me));
 
   // ---------------------------------------------------------------- events
-  const appLink = (extra) => `${location.origin}${location.pathname}${extra || ""}`;
+  // 共有リンクは常に公開URL（config.siteUrl）。古いURLやキャッシュから開いていても最新のURLを教えられるように。ローカル確認中だけは今のURL
+  const appLink = (extra) => `${CFG.siteUrl && !/^(localhost|127\.)/.test(location.hostname) ? CFG.siteUrl : location.origin + location.pathname}${extra || ""}`;
   $("brand-btn").addEventListener("click", () => {
     if (vs.pub && vs.pub.status === "playing") armConfirm($("btn-back-home"), "本当に退出？（もう一度押す）", goHome);
     else goHome();

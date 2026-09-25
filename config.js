@@ -5,6 +5,8 @@
 window.GAME_CONFIG = {
   // --- 識別子（localStorage と PeerJS ルームIDの接頭辞） ---
   id: "henken-guesser",
+  // --- 公開URL（友達に教えるリンクはこのURLになる） ---
+  siteUrl: "https://so-sons.github.io/henken-matching/",
 
   // --- 見た目の文言 ---
   title: "偏見マッチング",

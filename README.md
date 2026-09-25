@@ -1,4 +1,5 @@
 # 偏見マッチング
+nhttps://so-sons.github.io/henken-matching/
 
 出題者がこっそり決めたお題（キャラ・有名人・身近な人など何でもOK）を、回答者が「〇〇そうですか？」と偏見をぶつけて当てる対戦ゲーム。
 イナゲッサー（https://github.com/so-sons/inaguesser）の「質問モード」をベースにしています。
