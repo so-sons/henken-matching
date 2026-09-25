@@ -12,7 +12,7 @@ window.GAME_CONFIG = {
   heroTitle: "「〇〇そうですか？」\n偏見でお題を当てよう",
 
   // --- 入力欄の例 ---
-  biasExample: "彼女がコロコロ変わって",   // 「　」そうですか？ の空欄の例
+  biasExample: "淫夢知って",   // 「　」そうですか？ の空欄の例
   freeExample: "中学生ですか？",           // 自由質問の例
   topicExample: "ルフィ",                  // お題の例
   hintExample: "アニメキャラ",             // ジャンルの例
