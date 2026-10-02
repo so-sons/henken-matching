@@ -11,7 +11,8 @@ window.GAME_START = () => {
   const PEER_PREFIX = CFG.id + "-";
   const PLAYER_COLORS = ["#e0a800", "#1e88e5", "#e53976", "#2e9e4f"];
   const MAX_PLAYERS = CFG.maxPlayers || 8;      // 複数人モードの最大人数
-  const RANDOM_MULTI_MAX = 5;                   // ランダム対戦（複数人）の最大人数
+  const RANDOM_MULTI_MAX = 5;
+  const TIMEOUT_OUT = 3;                        // 回答者が連続でこの回数だけ時間切れになったら降参扱い                   // ランダム対戦（複数人）の最大人数
   const MODE_LABEL = { duel: "1対1", multi: "複数人" };
   // フレンド機能（social.js）。init で起動するまでの仮の中身
   let SOCIAL = { myCode: () => "", isFriend: () => false, isBlocked: () => false, hasPendingRequestTo: () => false, request() {}, block() {}, refresh() {} };
@@ -305,7 +306,7 @@ window.GAME_START = () => {
     const setterP = H.players[H.setter];
     H.players = H.players.filter((p) => p.connected);
     H.setter = Math.max(0, H.players.indexOf(setterP));
-    H.players.forEach((p, i) => { p.out = false; p.outWhy = ""; p.left = freshLeft(H); if (p.conn) hostSend(p.conn, { t: "welcome", you: i }); });
+    H.players.forEach((p, i) => { p.out = false; p.outWhy = ""; p.timeouts = 0; p.left = freshLeft(H); if (p.conn) hostSend(p.conn, { t: "welcome", you: i }); });
     H.log = []; H.winner = null; H.reason = null; H.events = [];
     H.shared = freshLeft(H); H.phase = "ask";
     clearTimeout(H.autoTimer); H.autoStartPending = false; releaseMatchHold();
@@ -382,6 +383,7 @@ window.GAME_START = () => {
     if (k === "b" && L.b <= 0) { errTo(pIdx, "偏見の回数がもうありません"); return; }
     if (k === "f" && L.f <= 0) { errTo(pIdx, "自由質問の回数がもうありません"); return; }
     H.log.push({ k, p: pIdx, q, a: null });
+    H.players[pIdx].timeouts = 0;
     if (k === "b") L.b--; else L.f--;
     H.phase = "answer";
     H.deadline = H.opts.turnSec ? Date.now() + H.opts.turnSec * 1000 : null;
@@ -411,6 +413,7 @@ window.GAME_START = () => {
     if (L.g <= 0) { errTo(pIdx, "回答できる回数がもうありません"); return; }
     if (H.log.some((g) => g.k === "g" && textNorm(g.q) === textNorm(q))) { errTo(pIdx, "すでに同じ回答が出ています"); return; }
     H.log.push({ k: "g", p: pIdx, q, r: null });
+    H.players[pIdx].timeouts = 0;
     L.g--;
     if (textNorm(q) === textNorm(H.topic.name)) { hostJudge("ok"); return; }
     H.phase = "judge";
@@ -473,13 +476,18 @@ window.GAME_START = () => {
     const H = vs.host;
     if (!H || H.status !== "playing" || !H.deadline || Date.now() < H.deadline) return;
     if (H.phase === "answer") { hostEvent(`${H.players[H.setter].name} が時間内に答えなかったので「${answerLabel(H.log[H.log.length - 1].k, "unknown")}」扱い`); hostAnswer("unknown"); return; }
-    // 回答者の時間切れ：偏見を1回分消費してログに残し、手番を回す（偏見が無制限・残り0のときは消費なし）
-    const L = pool(H, H.turn);
+    // 回答者の時間切れ：偏見を1回分消費してログに残し、手番を回す（偏見が無制限・残り0のときは消費なし）。
+    // 連続で TIMEOUT_OUT 回時間切れになったら降参扱い
+    const p = H.players[H.turn], L = pool(H, H.turn);
     const used = L && L.b > 0 && L.b !== Infinity;
     if (used) L.b--;
-    H.log.push({ k: "t", p: H.turn, used });
-    hostEvent(`${H.players[H.turn].name} は時間切れ${used ? `（偏見を1回消費・残り${L.b}回）` : ""}`);
-    H.turnNo++; advanceTurn(); hostBroadcast();
+    p.timeouts = (p.timeouts || 0) + 1;
+    const out = p.timeouts >= TIMEOUT_OUT;
+    H.log.push({ k: "t", p: H.turn, used, n: p.timeouts, out });
+    hostEvent(`${p.name} は時間切れ${used ? `（偏見を1回消費・残り${L.b}回）` : ""}` + (out ? `。${TIMEOUT_OUT}回連続のため降参扱い` : `（連続${p.timeouts}回目。あと${TIMEOUT_OUT - p.timeouts}回で降参扱い）`));
+    if (out) { p.out = true; p.outWhy = "t"; checkRemaining(); }
+    if (H.status === "playing") { H.turnNo++; advanceTurn(); }
+    hostBroadcast();
   }
   function publicState() {
     const H = vs.host;
@@ -812,7 +820,7 @@ window.GAME_START = () => {
       const dot = el("span", "pdot"); dot.style.setProperty("--c", PLAYER_COLORS[i % PLAYER_COLORS.length]); li.appendChild(dot);
       li.appendChild(el("span", null, p.name + (i === 0 ? "（ホスト）" : "")));
       const setter = i === pub.setter && pub.setterPicked !== false;   // ランダム対戦（複数人）は3人そろうまで出題者なし
-      const tag = !p.connected ? "切断" : p.out ? (p.outWhy === "g" ? "回答切れ" : "降参") : setter ? (i === vs.me ? "出題者（あなた）" : "出題者") : i === vs.me ? "あなた" : "";
+      const tag = !p.connected ? "切断" : p.out ? (p.outWhy === "g" ? "回答切れ" : p.outWhy === "t" ? "時間切れで降参" : "降参") : setter ? (i === vs.me ? "出題者（あなた）" : "出題者") : i === vs.me ? "あなた" : "";
       if (p.stats && (p.stats.hit || p.stats.esc)) li.appendChild(el("span", "p-stats", (p.stats.hit ? `🎯${p.stats.hit}` : "") + (p.stats.esc ? ` 🛡️${p.stats.esc}` : "")));
       if (pub.status === "playing" && pub.per && !setter && p.left && !p.out) li.appendChild(el("span", "p-left", `回答残り${p.left.g}`));
       if (tag) li.appendChild(el("span", "ptag", tag));
@@ -1018,7 +1026,7 @@ window.GAME_START = () => {
         head.appendChild(el("span", "qa-no", "時間切れ"));
         head.appendChild(el("span", "qa-by", by));
         li.appendChild(head);
-        li.appendChild(el("div", "qa-a unknown", x.used ? "偏見 −1" : "パス"));
+        li.appendChild(el("div", "qa-a " + (x.out ? "no" : "unknown"), x.out ? "降参扱い" : (x.used ? "偏見 −1" : "パス") + (x.n ? `（連続${x.n}回）` : "")));
         ol.prepend(li);
         return;
       }
@@ -1072,7 +1080,7 @@ window.GAME_START = () => {
     card.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
     shareText = [`${CFG.title}`, verdict, pub.answer ? `お題：${pub.answer}` : "",
-      ...pub.log.map((x) => (x.k === "t" ? `⏰ 時間切れ${x.used ? "（偏見 −1）" : ""}` : x.k === "b" ? `🗯️ ${biasText(x.q)} → ${answerLabel("b", x.a) || "-"}` : x.k === "f" ? `❓ ${x.q} → ${answerLabel("f", x.a) || "-"}` : `🎯 ${x.q} → ${(JUDGES.find((y) => y.k === x.r) || {}).label || "-"}`))].filter(Boolean).join("\n");
+      ...pub.log.map((x) => (x.k === "t" ? `⏰ 時間切れ${x.used ? "（偏見 −1）" : ""}${x.out ? "→ 降参扱い" : ""}` : x.k === "b" ? `🗯️ ${biasText(x.q)} → ${answerLabel("b", x.a) || "-"}` : x.k === "f" ? `❓ ${x.q} → ${answerLabel("f", x.a) || "-"}` : `🎯 ${x.q} → ${(JUDGES.find((y) => y.k === x.r) || {}).label || "-"}`))].filter(Boolean).join("\n");
     $("btn-copy-result").hidden = false;
     $("btn-again").hidden = !vs.isHost || pub.randomMulti; $("btn-again-same").hidden = !vs.isHost || pub.randomMulti;
   }
