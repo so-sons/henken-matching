@@ -466,3 +466,7 @@ select.text { appearance: auto; }
 .end-stats { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 4px; }
 .end-stats .row { font-weight: 800; }
 .end-stats .row.me { color: var(--navy-2); }
+
+/* 時間切れの行 */
+.qa-item.timeout { border-left: 6px solid var(--miss); background: var(--bg-2); }
+.qa-item.timeout .qa-no { color: #fff; background: var(--miss); padding: 1px 7px; border-radius: 999px; }

@@ -473,7 +473,13 @@ window.GAME_START = () => {
     const H = vs.host;
     if (!H || H.status !== "playing" || !H.deadline || Date.now() < H.deadline) return;
     if (H.phase === "answer") { hostEvent(`${H.players[H.setter].name} が時間内に答えなかったので「${answerLabel(H.log[H.log.length - 1].k, "unknown")}」扱い`); hostAnswer("unknown"); return; }
-    hostEvent(`${H.players[H.turn].name} は時間切れ`); H.turnNo++; advanceTurn(); hostBroadcast();
+    // 回答者の時間切れ：偏見を1回分消費してログに残し、手番を回す（偏見が無制限・残り0のときは消費なし）
+    const L = pool(H, H.turn);
+    const used = L && L.b > 0 && L.b !== Infinity;
+    if (used) L.b--;
+    H.log.push({ k: "t", p: H.turn, used });
+    hostEvent(`${H.players[H.turn].name} は時間切れ${used ? `（偏見を1回消費・残り${L.b}回）` : ""}`);
+    H.turnNo++; advanceTurn(); hostBroadcast();
   }
   function publicState() {
     const H = vs.host;
@@ -1005,6 +1011,17 @@ window.GAME_START = () => {
     let bn = 0, fn = 0;
     pub.log.forEach((x) => {
       const by = pub.players[x.p] ? pub.players[x.p].name : "?";
+      if (x.k === "t") {   // 時間切れ
+        const li = el("li", "qa-item timeout");
+        const head = el("div", "qa-q");
+        const dot = el("span", "pdot"); dot.style.setProperty("--c", PLAYER_COLORS[x.p % PLAYER_COLORS.length]); head.appendChild(dot);
+        head.appendChild(el("span", "qa-no", "時間切れ"));
+        head.appendChild(el("span", "qa-by", by));
+        li.appendChild(head);
+        li.appendChild(el("div", "qa-a unknown", x.used ? "偏見 −1" : "パス"));
+        ol.prepend(li);
+        return;
+      }
       const li = el("li", "qa-item " + (x.k === "b" ? "bias" : x.k === "f" ? "free" : "guess"));
       const head = el("div", "qa-q");
       const dot = el("span", "pdot"); dot.style.setProperty("--c", PLAYER_COLORS[x.p % PLAYER_COLORS.length]); head.appendChild(dot);
@@ -1055,7 +1072,7 @@ window.GAME_START = () => {
     card.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
     shareText = [`${CFG.title}`, verdict, pub.answer ? `お題：${pub.answer}` : "",
-      ...pub.log.map((x) => (x.k === "b" ? `🗯️ ${biasText(x.q)} → ${answerLabel("b", x.a) || "-"}` : x.k === "f" ? `❓ ${x.q} → ${answerLabel("f", x.a) || "-"}` : `🎯 ${x.q} → ${(JUDGES.find((y) => y.k === x.r) || {}).label || "-"}`))].filter(Boolean).join("\n");
+      ...pub.log.map((x) => (x.k === "t" ? `⏰ 時間切れ${x.used ? "（偏見 −1）" : ""}` : x.k === "b" ? `🗯️ ${biasText(x.q)} → ${answerLabel("b", x.a) || "-"}` : x.k === "f" ? `❓ ${x.q} → ${answerLabel("f", x.a) || "-"}` : `🎯 ${x.q} → ${(JUDGES.find((y) => y.k === x.r) || {}).label || "-"}`))].filter(Boolean).join("\n");
     $("btn-copy-result").hidden = false;
     $("btn-again").hidden = !vs.isHost || pub.randomMulti; $("btn-again-same").hidden = !vs.isHost || pub.randomMulti;
   }
