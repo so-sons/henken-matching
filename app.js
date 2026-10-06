@@ -248,6 +248,7 @@ window.GAME_START = () => {
     else if (msg.t === "judge") { if (pIdx === H.setter) hostJudge(msg.r); }
     else if (msg.t === "surrender") hostSurrender(pIdx);
     else if (msg.t === "chat") hostChat(pIdx, msg.text);
+    else if (msg.t === "topicimg") { if (pIdx === H.setter) hostSetTopicImg(msg.data); }
   }
   // intent: 自分で退出した（ホームへ・退出ボタン・キック）。false は通信が途切れた
   function hostOnLeave(conn, intent) {
@@ -270,7 +271,7 @@ window.GAME_START = () => {
       const setterP = H.players[H.setter];
       H.players = H.players.filter((x) => x.connected);
       const si = H.players.indexOf(setterP);
-      if (si < 0) { H.setter = 0; H.topic = null; } else H.setter = si;
+      if (si < 0) { H.setter = 0; H.topic = null; H.topicImg = null; } else H.setter = si;
       H.players.forEach((x, i) => sendWelcome(x, i));
       if (si < 0) H.setterPicked = false;
       randomMultiFlow();
@@ -285,7 +286,8 @@ window.GAME_START = () => {
   // 参加者ごとの復帰用の合言葉（token）も送る。出題者には自分のお題も（ページを開き直したときに表示できるように）
   function sendWelcome(p, i) {
     const H = vs.host; if (!p || !p.conn) return;
-    hostSend(p.conn, { t: "welcome", you: i, token: p.token, room: vs.code, topic: H && i === H.setter ? H.topic : null });
+    const mine = H && i === H.setter;
+    hostSend(p.conn, { t: "welcome", you: i, token: p.token, room: vs.code, topic: mine ? H.topic : null, img: mine ? H.topicImg || null : null });
   }
   // 通信が切れた人が戻ってきた
   function hostReattach(i, conn) {
@@ -297,6 +299,7 @@ window.GAME_START = () => {
     hostEvent(`${p.name} が復帰しました`);
     if (H.status === "playing" && !H.players.some((x) => x.dropped)) hostResume();
     hostBroadcast();
+    if (H.status === "finished" && H.topicImg) hostSend(conn, { t: "img", data: H.topicImg });
   }
   // 一時停止（通信が切れた人を待つ間はタイマーを止める）
   function hostPause() {
@@ -426,6 +429,7 @@ window.GAME_START = () => {
     H.log = []; H.winner = null; H.reason = null; H.events = [];
     H.shared = freshLeft(H); H.phase = "ask";
     clearTimeout(H.autoTimer); H.autoStartPending = false; releaseMatchHold();
+    H.imgSent = false;
     H.status = "playing";
     H.turn = H.setter; H.turnNo = 1;
     advanceTurn(); H.turnNo = 1;
@@ -435,7 +439,7 @@ window.GAME_START = () => {
   function hostBackToLobby(rotateSetter) {
     const H = vs.host; if (!H) return;
     const cur = H.players[H.setter];
-    H.status = "lobby"; H.paused = false; H.waitChoice = ""; H.pausedLeft = null; H.topic = null; H.log = []; H.winner = null; H.reason = null; H.events = []; H.phase = "ask"; H.deadline = null;
+    H.status = "lobby"; H.paused = false; H.waitChoice = ""; H.pausedLeft = null; H.topic = null; H.topicImg = null; H.imgSent = false; H.log = []; H.winner = null; H.reason = null; H.events = []; H.phase = "ask"; H.deadline = null;
     H.players = H.players.filter((p) => p.connected);
     H.players.forEach((p, i) => { p.out = false; p.outWhy = ""; sendWelcome(p, i); });
     let si = Math.max(0, H.players.indexOf(cur));
@@ -454,7 +458,7 @@ window.GAME_START = () => {
   function hostSetSetter(i) {
     const H = vs.host; if (!H || H.status !== "lobby") return;
     if (!(i >= 0 && i < H.players.length)) return;
-    if (H.setter !== i) { H.setter = i; H.topic = null; hostEvent(`出題者が ${H.players[i].name} に交代`); }
+    if (H.setter !== i) { H.setter = i; H.topic = null; H.topicImg = null; hostEvent(`出題者が ${H.players[i].name} に交代`); }
     hostBroadcast();
   }
   const cleanTopic = (t) => {
@@ -469,6 +473,65 @@ window.GAME_START = () => {
     randomMultiFlow();
     hostBroadcast();
   }
+
+  // ---- お題の画像（出題者の端末で縮めて持っておき、正解発表のときに参加者へ直接送る。サーバーには保存しない）
+  const IMG_MAX_LEN = 400000;   // 受け取る画像の上限（data URL の文字数）
+  const validImg = (d) => typeof d === "string" && d.length < IMG_MAX_LEN && /^data:image\/(jpeg|png|webp);base64,/.test(d);
+  async function shrinkImage(file) {
+    if (!file || !/^image\//.test(file.type)) throw new Error("画像ファイルを選んでください");
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("画像を読み込めませんでした")); i.src = url; });
+      const r = Math.min(1, 480 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * r)); c.height = Math.max(1, Math.round(img.height * r));
+      const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      let q = 0.82, data = c.toDataURL("image/jpeg", q);
+      while (data.length > 200000 && q > 0.35) { q -= 0.12; data = c.toDataURL("image/jpeg", q); }
+      return data;
+    } finally { URL.revokeObjectURL(url); }
+  }
+  const SHOW_IMG_KEY = CFG.id + ".showImages";
+  let showImages = true;
+  try { showImages = localStorage.getItem(SHOW_IMG_KEY) !== "0"; } catch {}
+  const myTopicImg = () => (vs.isHost ? (vs.host ? vs.host.topicImg || null : null) : vs.myTopicImg || null);
+  function setTopicImg(data) {
+    if (vs.isHost) { if (vs.host && vs.host.status === "lobby") { vs.host.topicImg = data; saveHostSnap(); } }
+    else { vs.myTopicImg = data; if (vs.conn) vs.conn.send({ t: "topicimg", data }); }
+    renderTopicUI();
+  }
+  function hostSetTopicImg(data) {
+    const H = vs.host; if (!H || H.status !== "lobby") return;
+    H.topicImg = data && validImg(data) ? data : null;
+    saveHostSnap();
+  }
+  // 正解発表の画像（結果カードの中の枠に入れる。届くのが状態より後になることもある）
+  function renderAnswerImg() {
+    const box = $("answer-img-box"); if (!box) return;
+    const pub = vs.pub; const data = vs.answerImg;
+    const key = (data ? data.length : 0) + ":" + showImages;   // 同じなら作り直さない（タップで見せた状態を保つ）
+    if (box.dataset.key === key) return;
+    box.dataset.key = key; box.innerHTML = "";
+    if (!pub || !data) { box.hidden = true; return; }
+    const setterP = pub.players[pub.setter];
+    if (setterP && setterP.code && SOCIAL.isBlocked(setterP.code)) { box.hidden = true; return; }
+    box.hidden = false;
+    if (!showImages) {
+      const b = el("button", "btn small", "🖼️ お題の画像を表示する"); b.type = "button";
+      b.addEventListener("click", () => { box.innerHTML = ""; box.appendChild(imgEl(data, false)); });
+      box.appendChild(b); return;
+    }
+    // ランダム対戦（知らない人）の画像は、ぼかして表示してタップで見せる
+    box.appendChild(imgEl(data, !!pub.fromRandom && vs.me !== pub.setter));
+  }
+  function imgEl(data, blur) {
+    const wrap = el("div", "answer-img-wrap" + (blur ? " blur" : ""));
+    const im = el("img", "answer-img"); im.src = data; im.alt = "お題の画像"; wrap.appendChild(im);
+    if (blur) {
+      wrap.appendChild(el("span", "blur-note", "タップして画像を表示"));
+      wrap.addEventListener("click", () => wrap.classList.remove("blur"), { once: true });
+    }
+    return wrap;
+  }
   // 出題者（ホストでもゲストでも）がお題を決める／取り消す（null）
   function pickTopic(t) {
     t = cleanTopic(t);
@@ -481,10 +544,15 @@ window.GAME_START = () => {
   function renderTopicUI() {
     const pub = vs.pub;
     const on = !!pub && vs.me === pub.setter && pub.status === "lobby" && pub.setterPicked !== false;
+    if (pub && vs.me !== pub.setter) vs.myTopicImg = null;   // 出題者でなくなったら持っている画像も捨てる
     $("topic-field").hidden = !on;
     if (!on) return;
     const t = myTopic();
     $("topic-picker").hidden = !!t; $("topic-chosen").hidden = !t;
+    const img = myTopicImg();
+    $("topic-img-preview").hidden = !img; if (img) $("topic-img-preview").src = img;
+    $("btn-topic-img-clear").hidden = !img;
+    $("topic-img-label").textContent = img ? "🖼️ 画像を変える" : "🖼️ 画像を添付（任意）";
     if (t) { $("topic-name").textContent = t.name; $("topic-hint").textContent = t.hint ? `ジャンル：${t.hint}` : "ジャンルなし"; }
   }
 
@@ -611,7 +679,7 @@ window.GAME_START = () => {
     return {
       status: H.status, topicChosen: !!H.topic, setter: H.setter, hint: H.status !== "lobby" && H.topic ? H.topic.hint : "",
       mode: H.mode, randomMulti: H.randomMulti, setterPicked: !H.randomMulti || !!H.setterPicked, per: perEach(H), cap: roomCap(H),
-      paused: !!H.paused, waitChoice: H.waitChoice || "",
+      paused: !!H.paused, waitChoice: H.waitChoice || "", fromRandom: !!(H.fromRandom || H.randomMulti),
       players: H.players.map((p) => ({ name: p.name, connected: p.connected, dropped: !!p.dropped, out: p.out, outWhy: p.outWhy || "", code: p.code || "", stats: p.stats, left: finLeft(p.left) })),
       chat: H.chat,
       opts: H.opts, log: H.log, shared: finLeft(H.shared), phase: H.phase,
@@ -624,7 +692,13 @@ window.GAME_START = () => {
     const H = vs.host; if (!H) return;
     const pub = publicState();
     H.players.forEach((p) => { if (p.conn && p.connected) hostSend(p.conn, { t: "state", s: pub }); });
+    if (H.status === "finished" && H.topicImg && !H.imgSent) {
+      H.imgSent = true;
+      H.players.forEach((p) => { if (p.conn && p.connected) hostSend(p.conn, { t: "img", data: H.topicImg }); });
+      vs.answerImg = H.topicImg;
+    }
     applyState(pub);
+    renderAnswerImg();
     saveHostSnap();
   }
 
@@ -725,7 +799,7 @@ window.GAME_START = () => {
             const name = String(msg.name || "プレイヤー").slice(0, 12);
             tryHostCode(0, vs.name, {
               mode: "duel",
-              onOpen: (H) => { H.setter = randInt(2); },   // 最初の出題者はランダム（1 はこれから入る相手）
+              onOpen: (H) => { H.setter = randInt(2); H.fromRandom = true; },   // 最初の出題者はランダム（1 はこれから入る相手）
               onReady: (code) => {
                 try { conn.send({ t: "room", code }); } catch {}
                 hostEvent(`ランダム対戦：${name} とマッチしました`);
@@ -919,9 +993,11 @@ window.GAME_START = () => {
     if (msg.t === "welcome") {
       vs.me = msg.you | 0;
       if (msg.topic) vs.myTopic = msg.topic;
+      if (msg.img && validImg(msg.img)) vs.myTopicImg = msg.img;
       try { localStorage.setItem(REJOIN_KEY, JSON.stringify({ at: Date.now(), room: msg.room || vs.code, token: msg.token })); } catch {}
     }
     else if (msg.t === "state") applyState(msg.s);
+    else if (msg.t === "img") { if (validImg(msg.data)) { vs.answerImg = msg.data; renderAnswerImg(); } }
     else if (msg.t === "closed") { leaveVersus(); openLobby(); lobbyStatus("ホストがルームを閉じました。"); toast("ホストがルームを閉じました"); }
     else if (msg.t === "error") {
       toast(msg.msg || "エラー"); lobbyStatus(msg.msg || "");
@@ -1163,7 +1239,9 @@ window.GAME_START = () => {
       if (meSetter) {
         who.appendChild(document.createTextNode(pub.phase === "answer" ? "質問に答えてください" : pub.phase === "judge" ? "回答を判定してください" : `${pub.players[pub.turn].name} の番`));
         const t = myTopic();
-        const tp = el("div", "turn-topic"); tp.append("お題：", el("b", null, t ? t.name : "")); who.appendChild(tp);
+        const tp = el("div", "turn-topic"); tp.append("お題：", el("b", null, t ? t.name : ""));
+        const ti = myTopicImg(); if (ti) { const im = el("img", "turn-thumb"); im.src = ti; im.alt = ""; tp.appendChild(im); }
+        who.appendChild(tp);
       } else who.textContent = waiting ? `${setterName(pub)} が考え中…` : mine ? "あなたの番！" : `${pub.players[pub.turn].name} の番`;
       who.className = "turn-who" + (mine || (meSetter && waiting) ? " me" : "");
 
@@ -1309,6 +1387,9 @@ window.GAME_START = () => {
       if (pub.hint) info.appendChild(el("div", "result-kana", "ジャンル：" + pub.hint));
       card.appendChild(info);
     }
+    const ib = el("div", "answer-img-box"); ib.id = "answer-img-box"; ib.hidden = true; card.appendChild(ib);
+    if (vs.isHost && vs.host && vs.host.topicImg) vs.answerImg = vs.host.topicImg;
+    renderAnswerImg();
     // このルームでの成績
     const ranked = pub.players.map((p, i) => ({ p, i })).filter((x) => x.p.connected && x.p.stats).sort((a, b) => (b.p.stats.hit - a.p.stats.hit) || (b.p.stats.esc - a.p.stats.esc));
     if (ranked.length > 1) {
@@ -1333,6 +1414,7 @@ window.GAME_START = () => {
   }
   function clearEndUI() {
     $("answer-card").hidden = true; $("answer-card").innerHTML = "";
+    vs.answerImg = null;
     ["btn-copy-result", "btn-again", "btn-again-same"].forEach((id) => ($(id).hidden = true));
   }
 
@@ -1414,6 +1496,15 @@ window.GAME_START = () => {
     pickTopic({ name, hint: $("hint-input").value });
   };
   $("btn-topic-set").addEventListener("click", setTopicFromInputs);
+  $("topic-img-file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    try { setTopicImg(await shrinkImage(f)); toast("画像を添付しました（正解発表のときに表示されます）"); }
+    catch (err) { toast(err.message || "画像を読み込めませんでした"); }
+  });
+  $("btn-topic-img-clear").addEventListener("click", () => setTopicImg(null));
+  $("show-images").checked = showImages;
+  $("show-images").addEventListener("change", (e) => { showImages = e.target.checked; try { localStorage.setItem(SHOW_IMG_KEY, showImages ? "1" : "0"); } catch {} renderAnswerImg(); });
   ["topic-input", "hint-input"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); setTopicFromInputs(); } }));
   $("btn-topic-change").addEventListener("click", () => {
     const t = myTopic(); if (t) { $("topic-input").value = t.name; $("hint-input").value = t.hint; }

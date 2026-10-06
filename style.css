@@ -484,3 +484,17 @@ select.text { appearance: auto; }
 .idea-chip { font: inherit; font-size: 13px; font-weight: 800; padding: 5px 10px; border-radius: 999px; border: 1px solid #c9d6f5; background: #e8efff; color: var(--navy); cursor: pointer; }
 .idea-chip:hover { background: #d6e2ff; }
 .idea-chip.reroll { background: var(--panel); border-color: var(--line); color: var(--muted); font-size: 12px; }
+
+/* お題の画像 */
+.topic-img-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.topic-img-row label.btn { cursor: pointer; }
+.topic-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.turn-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; vertical-align: middle; margin-left: 6px; border: 1px solid var(--line); }
+.answer-img-box { margin: 6px 0 10px; }
+.answer-img-wrap { position: relative; display: inline-block; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); cursor: default; }
+.answer-img { display: block; max-width: min(100%, 320px); max-height: 320px; object-fit: contain; background: #fff; }
+.answer-img-wrap.blur { cursor: pointer; }
+.answer-img-wrap.blur .answer-img { filter: blur(22px); transform: scale(1.08); }
+.blur-note { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-weight: 900; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
+.answer-img-wrap.blur .blur-note { display: flex; }
+.img-setting { font-size: 12px; color: var(--muted); }

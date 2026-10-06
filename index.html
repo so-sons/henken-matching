@@ -176,7 +176,15 @@
           <span class="muted" id="topic-hint"></span>
           <button class="btn small" id="btn-topic-change" type="button">変更</button>
         </div>
+        <div class="topic-img-row">
+          <label class="btn small" for="topic-img-file" id="topic-img-label">🖼️ 画像を添付（任意）</label>
+          <input type="file" id="topic-img-file" accept="image/*" hidden>
+          <img class="topic-thumb" id="topic-img-preview" alt="" hidden>
+          <button class="btn small" id="btn-topic-img-clear" type="button" hidden>画像を外す</button>
+        </div>
+        <p class="muted fm-note">画像は正解発表のときに参加者へ表示されます（サイトやサーバーには保存されません）。キャラの画像などは友達同士で楽しむ範囲で使い、実在の人の写真は本人の許可があるものだけにしてください。</p>
       </div>
+      <label class="check-row img-setting"><input type="checkbox" id="show-images"> 正解発表でお題の画像を表示する（ランダム対戦ではタップで表示）</label>
       <div id="lobby-chat-slot"></div>
       <p class="muted" id="lobby-hint"></p>
       <div class="row">
