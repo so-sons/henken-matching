@@ -57,7 +57,7 @@ window.GAME_START = () => {
     $("hero-kicker").textContent = CFG.kicker || "";
     const h1 = $("hero-title"); h1.innerHTML = "";
     String(CFG.heroTitle || CFG.title).split("\n").forEach((line, i) => { if (i) h1.appendChild(el("br")); h1.appendChild(document.createTextNode(line)); });
-    $("hero-example").textContent = CFG.biasExample || "〇〇";
+    $("hero-example").textContent = CFG.heroExample || "〇〇";
     $("rule-free-example").textContent = CFG.freeExample || "";
     $("rule-hint-example").textContent = CFG.hintExample || "";
     $("bias-input").placeholder = "例：" + (CFG.biasExample || "");
@@ -84,6 +84,7 @@ window.GAME_START = () => {
     stopTimer();
     $("topbar-status").textContent = "";
     showScreen("home");
+    renderResumeCard();
   }
 
   // ----------------------------------------------------------- 回答の種類
@@ -158,13 +159,14 @@ window.GAME_START = () => {
   // ov: ランダム対戦用のフック { onOpen(H), onReady(code), onFail(e) }
   function tryHostCode(attempt, name, ov) {
     ov = ov || {};
-    const code = String(100000 + randInt(900000));
+    const code = ov.code || String(100000 + randInt(900000));
     const peer = makePeer(PEER_PREFIX + code);
     let settled = false;
     peer.on("open", () => {
+      if (settled) { vs.hostOffline = false; renderConnBanner(); return; }   // サーバーへの再接続：ルームはそのまま
       settled = true;
       vs.peer = peer; vs.isHost = true; vs.code = code; vs.me = 0;
-      vs.host = {
+      vs.host = ov.restore ? restoreHostState(ov.restore) : {
         mode: ov.mode === "multi" ? "multi" : "duel",   // duel=1対1 / multi=複数人（ルーム作成時に決める）
         randomMulti: !!ov.randomMulti,                  // ランダム対戦（複数人）のルーム：自動で出題者決定・開始・次の試合
         players: [newPlayer(name, null, SOCIAL.myCode())],
@@ -176,9 +178,10 @@ window.GAME_START = () => {
         turn: 0, turnNo: 1, deadline: null, winner: null, reason: null, events: [],
       };
       peer.on("connection", onHostConnection);
-      peer.on("disconnected", () => { lobbyStatus("シグナリングサーバーから切断されました。再接続中…"); try { peer.reconnect(); } catch {} });
+      peer.on("disconnected", () => { if (peer.destroyed || vs.peer !== peer) return; vs.hostOffline = true; renderConnBanner(); try { peer.reconnect(); } catch {} });
       peer.on("error", (e) => { console.warn(e); if (e.type !== "peer-unavailable") toast("通信エラー: " + e.type); });
       if (ov.onOpen) ov.onOpen(vs.host);
+      if (ov.restore) hostEvent("ホストが戻りました。ほかの参加者の復帰を待っています");
       $("btn-create-room").disabled = false;
       enterRoomView();
       hostBroadcast();
@@ -188,7 +191,11 @@ window.GAME_START = () => {
       if (settled) return;
       settled = true;
       try { peer.destroy(); } catch {}
-      if (e.type === "unavailable-id" && attempt < 5) { tryHostCode(attempt + 1, name, ov); return; }
+      if (e.type === "unavailable-id" && ov.code && attempt < 20) {   // 前のルーム番号がまだ解放されていない → 少し待って取り直す
+        lobbyStatus(`前のルーム番号を取り戻しています…（${attempt + 1}）`);
+        setTimeout(() => tryHostCode(attempt + 1, name, ov), 3000); return;
+      }
+      if (e.type === "unavailable-id" && !ov.code && attempt < 5) { tryHostCode(attempt + 1, name, ov); return; }
       if (ov.onFail) { ov.onFail(e); return; }
       $("btn-create-room").disabled = false;
       lobbyStatus("ルームを作成できませんでした（" + e.type + "）。時間をおいて再度お試しください。");
@@ -208,20 +215,31 @@ window.GAME_START = () => {
     const pIdx = H.players.findIndex((p) => p.conn === conn);
     if (msg.t === "join") {
       if (pIdx >= 0) return;
-      if (H.status !== "lobby") { hostSend(conn, { t: "error", msg: "対戦中のため参加できません。次のゲームまでお待ちください。" }); return; }
+      if (H.status !== "lobby") { hostSend(conn, { t: "error", msg: "対戦中のため参加できません。次のゲームまでお待ちください。", fatal: true }); return; }
       const cap = roomCap(H);
-      if (H.players.filter((p) => p.connected).length >= cap) { hostSend(conn, { t: "error", msg: "満員です（最大" + cap + "人）" }); return; }
+      if (H.players.filter((p) => p.connected).length >= cap) { hostSend(conn, { t: "error", msg: "満員です（最大" + cap + "人）", fatal: true }); return; }
       const name = String(msg.name || "プレイヤー").slice(0, 12);
       const code = validCode(msg.code);
-      if (code && SOCIAL.isBlocked(code)) { hostSend(conn, { t: "error", msg: "このルームには参加できません" }); setTimeout(() => { try { conn.close(); } catch {} }, 300); return; }
+      if (code && SOCIAL.isBlocked(code)) { hostSend(conn, { t: "error", msg: "このルームには参加できません", fatal: true }); setTimeout(() => { try { conn.close(); } catch {} }, 300); return; }
       H.players.push(newPlayer(name, conn, code));
-      hostSend(conn, { t: "welcome", you: H.players.length - 1 });
+      sendWelcome(H.players[H.players.length - 1], H.players.length - 1);
       hostEvent(`${name} が参加しました`);
       randomMultiFlow();
       hostBroadcast();
       return;
     }
+    if (msg.t === "rejoin") {   // 通信が切れた人が戻ってきた
+      if (pIdx >= 0) return;
+      const tok = String(msg.token || "");
+      const i = tok ? H.players.findIndex((p) => p.token === tok) : -1;
+      if (i >= 0) { hostReattach(i, conn); return; }
+      if (H.status === "lobby") { hostOnMessage(conn, { t: "join", name: msg.name, code: msg.code }); return; }
+      hostSend(conn, { t: "error", msg: "この対戦には戻れませんでした（すでに終わったか、ルームが変わりました）", fatal: true });
+      setTimeout(() => { try { conn.close(); } catch {} }, 300);
+      return;
+    }
     if (pIdx < 0) return;
+    if (msg.t === "leave") { hostOnLeave(conn, true); return; }
     if (msg.t === "ask") hostAsk(pIdx, msg.k, msg.q);
     else if (msg.t === "guess") hostGuess(pIdx, msg.q);
     else if (msg.t === "topic") { if (pIdx === H.setter) hostSetTopic(msg.topic); }
@@ -230,18 +248,29 @@ window.GAME_START = () => {
     else if (msg.t === "surrender") hostSurrender(pIdx);
     else if (msg.t === "chat") hostChat(pIdx, msg.text);
   }
-  function hostOnLeave(conn) {
+  // intent: 自分で退出した（ホームへ・退出ボタン・キック）。false は通信が途切れた
+  function hostOnLeave(conn, intent) {
     const H = vs.host; if (!H) return;
     const p = H.players.find((x) => x.conn === conn);
     if (!p || !p.connected) return;
     p.connected = false;
-    hostEvent(`${p.name} が切断しました`);
+    if (H.status === "playing" && !intent) {
+      // 通信が途切れた：タイマーを止めて、ホストに「相手を待つ／待たずに続ける」を選んでもらう
+      p.dropped = true;
+      hostEvent(`${p.name} の通信が切れました`);
+      hostPause();
+      if (H.waitChoice !== "wait") H.waitChoice = "ask";
+      hostBroadcast();
+      return;
+    }
+    p.dropped = false;
+    hostEvent(intent ? `${p.name} が退出しました` : `${p.name} が切断しました`);
     if (H.status === "lobby") {
       const setterP = H.players[H.setter];
       H.players = H.players.filter((x) => x.connected);
       const si = H.players.indexOf(setterP);
       if (si < 0) { H.setter = 0; H.topic = null; } else H.setter = si;
-      H.players.forEach((x, i) => { if (x.conn) hostSend(x.conn, { t: "welcome", you: i }); });
+      H.players.forEach((x, i) => sendWelcome(x, i));
       if (si < 0) H.setterPicked = false;
       randomMultiFlow();
     } else if (H.status === "playing") {
@@ -251,6 +280,90 @@ window.GAME_START = () => {
       if (H.status === "playing" && H.turn === i && H.phase === "ask") advanceTurn();
     }
     hostBroadcast();
+  }
+  // 参加者ごとの復帰用の合言葉（token）も送る。出題者には自分のお題も（ページを開き直したときに表示できるように）
+  function sendWelcome(p, i) {
+    const H = vs.host; if (!p || !p.conn) return;
+    hostSend(p.conn, { t: "welcome", you: i, token: p.token, room: vs.code, topic: H && i === H.setter ? H.topic : null });
+  }
+  // 通信が切れた人が戻ってきた
+  function hostReattach(i, conn) {
+    const H = vs.host; const p = H.players[i];
+    const old = p.conn; p.conn = conn;   // 先に差し替えるので、古いつながりの close は無視される
+    if (old && old !== conn) { try { old.close(); } catch {} }
+    p.connected = true; p.dropped = false;
+    sendWelcome(p, i);
+    hostEvent(`${p.name} が復帰しました`);
+    if (H.status === "playing" && !H.players.some((x) => x.dropped)) hostResume();
+    hostBroadcast();
+  }
+  // 一時停止（通信が切れた人を待つ間はタイマーを止める）
+  function hostPause() {
+    const H = vs.host; if (H.paused) return;
+    H.paused = true;
+    H.pausedLeft = H.deadline ? Math.max(1000, H.deadline - Date.now()) : null;
+    H.deadline = null;
+  }
+  function hostResume() {
+    const H = vs.host; if (!H.paused) return;
+    H.paused = false; H.waitChoice = "";
+    H.deadline = H.pausedLeft != null ? Date.now() + H.pausedLeft : null;
+    H.pausedLeft = null;
+  }
+  // ホストが「相手を待つ」を選んだ
+  function hostWait() {
+    const H = vs.host; if (!H || H.status !== "playing" || !H.paused) return;
+    H.waitChoice = "wait";
+    hostEvent("通信が切れた人の復帰を待ちます（タイマー停止中）");
+    hostBroadcast();
+  }
+  // ホストが「待たずに続ける」を選んだ：切れた人はその試合から抜ける（出題者なら試合終了）
+  function hostNoWait() {
+    const H = vs.host; if (!H || H.status !== "playing" || !H.paused) return;
+    const gone = H.players.filter((p) => p.dropped);
+    gone.forEach((p) => { p.dropped = false; });
+    hostEvent(`${gone.map((p) => p.name).join("・") || "切断した人"} を待たずに続けます`);
+    if (gone.includes(H.players[H.setter])) { H.paused = false; finish(null, "setter_left"); hostBroadcast(); return; }
+    gone.forEach((p) => { p.out = true; p.outWhy = "d"; });
+    hostResume();
+    checkRemaining();
+    if (H.status === "playing" && H.phase === "ask" && !eligible(H, H.turn)) advanceTurn();
+    hostBroadcast();
+  }
+
+  // ---- ページを閉じても戻れるように、ルームの状態をこの端末に保存する
+  const SNAP_KEY = CFG.id + ".hostSnap", REJOIN_KEY = CFG.id + ".rejoin";
+  const RESUME_TTL = 3 * 60 * 60 * 1000;   // 3時間以内なら戻れる
+  const jsonInf = (k, v) => (v === Infinity ? "__inf" : v);
+  const unInf = (k, v) => (v === "__inf" ? Infinity : v);
+  function saveHostSnap() {
+    const H = vs.host; if (!H) return;
+    try {
+      const copy = { ...H, autoTimer: null, players: H.players.map((p) => ({ ...p, conn: null, chatTs: [] })) };
+      localStorage.setItem(SNAP_KEY, JSON.stringify({ at: Date.now(), code: vs.code, name: H.players[0].name, H: copy }, jsonInf));
+    } catch {}
+  }
+  const loadResume = (k) => { try { const v = JSON.parse(localStorage.getItem(k) || "null", unInf); return v && Date.now() - v.at < RESUME_TTL ? v : null; } catch { return null; } };
+  const clearResume = () => { try { localStorage.removeItem(SNAP_KEY); localStorage.removeItem(REJOIN_KEY); } catch {} };
+  // 保存しておいた状態からルームを作り直す（参加者はまだ戻っていないので、対戦中なら一時停止して待つ）
+  function restoreHostState(R) {
+    const H = R;
+    H.autoTimer = null; H.autoStartPending = false;
+    H.players.forEach((p, i) => {
+      p.conn = null; p.chatTs = [];
+      if (i === 0) { p.connected = true; p.dropped = false; return; }
+      if (p.connected || p.dropped) p.dropped = H.status === "playing";
+      p.connected = false;
+    });
+    if (H.status === "lobby") {
+      if (H.setter !== 0) { H.topic = null; H.setterPicked = false; }
+      H.players = [H.players[0]]; H.setter = 0;
+    }
+    if (H.status === "playing" && H.players.some((p) => p.dropped)) {
+      H.pausedLeft = H.paused ? H.pausedLeft : (H.deadline ? Math.max(5000, H.deadline - Date.now()) : null);
+      H.paused = true; H.deadline = null; H.waitChoice = "wait";
+    }
+    return H;
   }
   function hostChat(pIdx, text) {
     const H = vs.host; const p = H && H.players[pIdx]; if (!p) return;
@@ -266,13 +379,14 @@ window.GAME_START = () => {
   // ブロックした相手をルームから出す（ホストのみ）
   function hostKick(i) {
     const H = vs.host; const p = H && H.players[i]; if (!p || !p.conn || i === 0) return;
-    hostSend(p.conn, { t: "error", msg: "ルームから退出しました" });
-    setTimeout(() => { try { p.conn.close(); } catch {} hostOnLeave(p.conn); }, 300);
+    hostSend(p.conn, { t: "error", msg: "ルームから退出しました", fatal: true });
+    setTimeout(() => { try { p.conn.close(); } catch {} hostOnLeave(p.conn, true); }, 300);
   }
   function hostEvent(text) { const H = vs.host; H.events.push(text); if (H.events.length > 20) H.events.shift(); }
   const setterName = (pub) => (pub.players[pub.setter] ? pub.players[pub.setter].name : "出題者");
   const eligible = (H, i) => { const p = H.players[i]; return !!p && p.connected && !p.out && i !== H.setter; };
-  const newPlayer = (name, conn, code) => ({ name, conn, connected: true, out: false, outWhy: "", code: code || "", chatTs: [], stats: { hit: 0, esc: 0 }, left: null });
+  const randToken = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const newPlayer = (name, conn, code) => ({ name, conn, connected: true, dropped: false, out: false, outWhy: "", code: code || "", token: randToken(), chatTs: [], stats: { hit: 0, esc: 0 }, left: null });
   const roomCap = (H) => (H.mode === "duel" ? 2 : H.randomMulti ? RANDOM_MULTI_MAX : MAX_PLAYERS);
   // 回数を1人ずつ数えるか（複数人モードで「1人ずつ」のとき。1対1は回答者が1人なのでどちらでも同じ）
   const perEach = (H) => H.mode === "multi" && H.opts.per !== "total";
@@ -306,7 +420,7 @@ window.GAME_START = () => {
     const setterP = H.players[H.setter];
     H.players = H.players.filter((p) => p.connected);
     H.setter = Math.max(0, H.players.indexOf(setterP));
-    H.players.forEach((p, i) => { p.out = false; p.outWhy = ""; p.timeouts = 0; p.left = freshLeft(H); if (p.conn) hostSend(p.conn, { t: "welcome", you: i }); });
+    H.players.forEach((p, i) => { p.out = false; p.outWhy = ""; p.timeouts = 0; p.left = freshLeft(H); sendWelcome(p, i); });
     H.log = []; H.winner = null; H.reason = null; H.events = [];
     H.shared = freshLeft(H); H.phase = "ask";
     clearTimeout(H.autoTimer); H.autoStartPending = false; releaseMatchHold();
@@ -319,9 +433,9 @@ window.GAME_START = () => {
   function hostBackToLobby(rotateSetter) {
     const H = vs.host; if (!H) return;
     const cur = H.players[H.setter];
-    H.status = "lobby"; H.topic = null; H.log = []; H.winner = null; H.reason = null; H.events = []; H.phase = "ask"; H.deadline = null;
+    H.status = "lobby"; H.paused = false; H.waitChoice = ""; H.pausedLeft = null; H.topic = null; H.log = []; H.winner = null; H.reason = null; H.events = []; H.phase = "ask"; H.deadline = null;
     H.players = H.players.filter((p) => p.connected);
-    H.players.forEach((p, i) => { p.out = false; p.outWhy = ""; if (p.conn) hostSend(p.conn, { t: "welcome", you: i }); });
+    H.players.forEach((p, i) => { p.out = false; p.outWhy = ""; sendWelcome(p, i); });
     let si = Math.max(0, H.players.indexOf(cur));
     if (rotateSetter && H.players.length > 1) si = (si + 1) % H.players.length;
     H.setter = si;
@@ -375,7 +489,7 @@ window.GAME_START = () => {
   // 回答者の質問（k: "b"=偏見, "f"=自由質問）
   function hostAsk(pIdx, k, q) {
     const H = vs.host;
-    if (H.status !== "playing" || H.phase !== "ask" || H.turn !== pIdx || !eligible(H, pIdx)) return;
+    if (H.status !== "playing" || H.paused || H.phase !== "ask" || H.turn !== pIdx || !eligible(H, pIdx)) return;
     if (k !== "b" && k !== "f") return;
     q = k === "b" ? normBias(q) : normFree(q);
     if (!q) return;
@@ -392,7 +506,7 @@ window.GAME_START = () => {
   // 出題者の返事
   function hostAnswer(a) {
     const H = vs.host;
-    if (!H || H.status !== "playing" || H.phase !== "answer") return;
+    if (!H || H.status !== "playing" || H.paused || H.phase !== "answer") return;
     const last = H.log[H.log.length - 1]; if (!last || (last.k !== "b" && last.k !== "f") || last.a) return;
     if (!answersFor(last.k).some((x) => x.k === a)) return;
     last.a = a;
@@ -406,7 +520,7 @@ window.GAME_START = () => {
   // 回答：お題と同じ文字なら自動で正解。それ以外は出題者の判定待ち
   function hostGuess(pIdx, q) {
     const H = vs.host;
-    if (H.status !== "playing" || H.phase !== "ask" || H.turn !== pIdx || !eligible(H, pIdx)) return;
+    if (H.status !== "playing" || H.paused || H.phase !== "ask" || H.turn !== pIdx || !eligible(H, pIdx)) return;
     q = normFree(q).slice(0, 40);
     if (!q) return;
     const L = pool(H, pIdx);
@@ -422,7 +536,7 @@ window.GAME_START = () => {
   }
   function hostJudge(r) {
     const H = vs.host;
-    if (!H || H.status !== "playing" || !["ok", "close", "ng"].includes(r)) return;
+    if (!H || H.status !== "playing" || H.paused || !["ok", "close", "ng"].includes(r)) return;
     const last = H.log[H.log.length - 1]; if (!last || last.k !== "g" || last.r) return;
     last.r = r;
     H.phase = "ask";
@@ -463,6 +577,7 @@ window.GAME_START = () => {
   }
   function finish(winner, reason) {
     const H = vs.host; H.status = "finished"; H.winner = winner; H.reason = reason; H.deadline = null;
+    H.paused = false; H.waitChoice = ""; H.pausedLeft = null;
     // 成績：当てた人は 🎯、誰にも当てられなければ出題者に 🛡️
     if (reason === "correct" && H.players[winner]) H.players[winner].stats.hit++;
     else if ((reason === "no_guesses" || reason === "all_out") && H.players[H.setter]) H.players[H.setter].stats.esc++;
@@ -474,7 +589,7 @@ window.GAME_START = () => {
   }
   function hostTick() {
     const H = vs.host;
-    if (!H || H.status !== "playing" || !H.deadline || Date.now() < H.deadline) return;
+    if (!H || H.status !== "playing" || H.paused || !H.deadline || Date.now() < H.deadline) return;
     if (H.phase === "answer") { hostEvent(`${H.players[H.setter].name} が時間内に答えなかったので「${answerLabel(H.log[H.log.length - 1].k, "unknown")}」扱い`); hostAnswer("unknown"); return; }
     // 回答者の時間切れ：偏見を1回分消費してログに残し、手番を回す（偏見が無制限・残り0のときは消費なし）。
     // 連続で TIMEOUT_OUT 回時間切れになったら降参扱い
@@ -494,7 +609,8 @@ window.GAME_START = () => {
     return {
       status: H.status, topicChosen: !!H.topic, setter: H.setter, hint: H.status !== "lobby" && H.topic ? H.topic.hint : "",
       mode: H.mode, randomMulti: H.randomMulti, setterPicked: !H.randomMulti || !!H.setterPicked, per: perEach(H), cap: roomCap(H),
-      players: H.players.map((p) => ({ name: p.name, connected: p.connected, out: p.out, outWhy: p.outWhy || "", code: p.code || "", stats: p.stats, left: finLeft(p.left) })),
+      paused: !!H.paused, waitChoice: H.waitChoice || "",
+      players: H.players.map((p) => ({ name: p.name, connected: p.connected, dropped: !!p.dropped, out: p.out, outWhy: p.outWhy || "", code: p.code || "", stats: p.stats, left: finLeft(p.left) })),
       chat: H.chat,
       opts: H.opts, log: H.log, shared: finLeft(H.shared), phase: H.phase,
       turn: H.turn, turnNo: H.turnNo, now: Date.now(), deadline: H.deadline,
@@ -507,6 +623,7 @@ window.GAME_START = () => {
     const pub = publicState();
     H.players.forEach((p) => { if (p.conn && p.connected) hostSend(p.conn, { t: "state", s: pub }); });
     applyState(pub);
+    saveHostSnap();
   }
 
   // ---- ランダム対戦（サーバーなしの待ち合わせ）
@@ -745,6 +862,27 @@ window.GAME_START = () => {
   }
 
   // ---- guest
+  // ホストにつなぐ（参加・復帰で共通）。opts: { first: 最初に送るメッセージ, onOpen(), onFail(msg) }
+  function connectHost(code, opts) {
+    const peer = makePeer(undefined);
+    let joined = false;
+    const fail = (msg) => { if (joined) return; joined = true; try { peer.destroy(); } catch {} opts.onFail(msg); };
+    const timeout = setTimeout(() => fail("ホストに接続できませんでした。"), 15000);
+    peer.on("open", () => {
+      if (joined) return;   // サーバーへの再接続でも open が来るので、2回目は無視
+      const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
+      conn.on("open", () => {
+        clearTimeout(timeout); joined = true;
+        vs.peer = peer; vs.conn = conn; vs.isHost = false; vs.code = code; vs.lost = false;
+        conn.send(opts.first);
+        conn.on("data", guestOnMessage);
+        conn.on("close", () => onHostLost(conn));
+        conn.on("error", () => onHostLost(conn));
+        if (opts.onOpen) opts.onOpen();
+      });
+    });
+    peer.on("error", (e) => { clearTimeout(timeout); fail(e.type === "peer-unavailable" ? "そのコードのルームが見つかりません。" : "接続エラー: " + e.type); });
+  }
   function joinRoom() {
     if (!peerAvailable()) { toast("通信ライブラリが読み込めていません"); return; }
     const code = $("join-code").value.replace(/\D/g, "");
@@ -752,44 +890,93 @@ window.GAME_START = () => {
     const name = myNick();
     lobbyStatus("ルームに接続中…");
     $("btn-join-room").disabled = true;
-    const peer = makePeer(undefined);
-    let joined = false;
-    const fail = (msg) => { if (joined) return; joined = true; $("btn-join-room").disabled = false; lobbyStatus(msg); try { peer.destroy(); } catch {} };
-    const timeout = setTimeout(() => fail("ホストに接続できませんでした。コードを確認してください。"), 15000);
-    peer.on("open", () => {
-      const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
-      conn.on("open", () => {
-        clearTimeout(timeout); joined = true;
-        vs.peer = peer; vs.conn = conn; vs.isHost = false; vs.code = code;
-        $("btn-join-room").disabled = false;
-        conn.send({ t: "join", name, code: SOCIAL.myCode() });
-        conn.on("data", guestOnMessage);
-        conn.on("close", onHostLost);
-        conn.on("error", onHostLost);
-        enterRoomView();
-      });
-    });
-    peer.on("error", (e) => {
-      clearTimeout(timeout);
-      fail(e.type === "peer-unavailable" ? "そのコードのルームが見つかりません。" : "接続エラー: " + e.type);
+    connectHost(code, {
+      first: { t: "join", name, code: SOCIAL.myCode() },
+      onOpen: () => { $("btn-join-room").disabled = false; enterRoomView(); },
+      onFail: (msg) => { $("btn-join-room").disabled = false; lobbyStatus(msg === "そのコードのルームが見つかりません。" || msg.startsWith("接続エラー") ? msg : "ホストに接続できませんでした。コードを確認してください。"); },
     });
   }
+  // 通信が切れたあとの「対戦に戻る」：つながるまで数秒おきに試す（相手側が戻るのを待つことにもなる）
+  let rejoinTimer = null;
+  function rejoin() {
+    const r = loadResume(REJOIN_KEY);
+    if (!r) { toast("戻れる対戦がありません"); vs.lost = false; renderConnBanner(); renderResumeCard(); return; }
+    if (!peerAvailable()) { toast("通信ライブラリが読み込めていません"); return; }
+    clearTimeout(rejoinTimer);
+    vs.rejoining = true; renderConnBanner();
+    if ($("screen-home").hidden === false) { openLobby(); lobbyStatus("対戦に戻っています…"); }
+    connectHost(r.room, {
+      first: { t: "rejoin", token: r.token, name: vs.name || "プレイヤー", code: SOCIAL.myCode() },
+      onOpen: () => { vs.rejoining = false; vs.lost = false; enterRoomView(); renderConnBanner(); renderResumeCard(); },   // 状態が届くと対戦／ルームの画面に切り替わる
+      onFail: () => { if (!vs.rejoining) return; renderConnBanner(); rejoinTimer = setTimeout(rejoin, 4000); },
+    });
+  }
+  function stopRejoin() { vs.rejoining = false; clearTimeout(rejoinTimer); renderConnBanner(); }
   function guestOnMessage(msg) {
     if (!msg || typeof msg !== "object") return;
-    if (msg.t === "welcome") vs.me = msg.you | 0;
+    if (msg.t === "welcome") {
+      vs.me = msg.you | 0;
+      if (msg.topic) vs.myTopic = msg.topic;
+      try { localStorage.setItem(REJOIN_KEY, JSON.stringify({ at: Date.now(), room: msg.room || vs.code, token: msg.token })); } catch {}
+    }
     else if (msg.t === "state") applyState(msg.s);
-    else if (msg.t === "error") { vs.lastErr = msg.msg || ""; vs.lastErrAt = Date.now(); toast(msg.msg || "エラー"); lobbyStatus(msg.msg || ""); }
+    else if (msg.t === "closed") { leaveVersus(); openLobby(); lobbyStatus("ホストがルームを閉じました。"); toast("ホストがルームを閉じました"); }
+    else if (msg.t === "error") {
+      toast(msg.msg || "エラー"); lobbyStatus(msg.msg || "");
+      if (msg.fatal) { const m = msg.msg; leaveVersus(); openLobby(); lobbyStatus(m); }   // 参加できない・退出させられた など
+    }
   }
-  function onHostLost() {
+  // 予期しない切断：画面はそのままにして「対戦に戻る」を出す
+  function onHostLost(conn) {
+    if (conn && conn !== vs.conn) return;   // 古いつながり
     if (!vs.peer) return;
-    // 直前にホストから理由（参加できない等）が届いていれば、そちらを出す
-    const why = Date.now() - (vs.lastErrAt || 0) < 3000 ? vs.lastErr : ""; vs.lastErr = "";
-    toast(why || "ホストとの接続が切れました");
-    if (vs.pub && vs.pub.status === "playing") {
-      stopTimer(); $("act-panel").hidden = true; $("answer-panel").hidden = true;
-      $("turn-who").textContent = "接続終了"; $("turn-timer").textContent = "";
-      vs.pub = null; try { vs.peer.destroy(); } catch {} vs.peer = null; vs.conn = null;
-    } else { leaveVersus(); openLobby(); lobbyStatus(why || "ホストとの接続が切れました。"); }
+    try { vs.peer.destroy(); } catch {}
+    vs.peer = null; vs.conn = null; vs.lost = true; vs.deadlineLocal = null;
+    $("act-panel").hidden = true; $("answer-panel").hidden = true;
+    toast("通信が切れました");
+    renderConnBanner();
+  }
+  // 通信まわりのお知らせ（画面上部）
+  function renderConnBanner() {
+    const b = $("conn-banner"), txt = $("conn-text"), act = $("conn-actions");
+    act.innerHTML = "";
+    const btn = (label, cls, fn) => { const x = el("button", "btn small " + (cls || ""), label); x.type = "button"; x.addEventListener("click", fn); act.appendChild(x); };
+    const pub = vs.pub;
+    let msg = "", warn = false;
+    if (!vs.isHost && (vs.lost || vs.rejoining)) {
+      warn = true;
+      if (vs.rejoining) { msg = "再接続しています…（相手が戻るまで待ちます）"; btn("やめる", "", stopRejoin); }
+      else { msg = "通信が切れました。"; btn("対戦に戻る", "primary", rejoin); }
+      btn("ホームへ", "", goHome);
+    } else if (vs.isHost && vs.hostOffline) {
+      warn = true;
+      msg = "サーバーとの接続が切れました。再接続しています…";
+      btn("再接続", "", () => { try { vs.peer && vs.peer.reconnect(); } catch {} });
+    } else if (pub && pub.status === "playing" && pub.paused) {
+      const names = pub.players.filter((p) => p.dropped).map((p) => p.name).join("・") || "参加者";
+      if (vs.isHost && pub.waitChoice === "ask") { msg = `${names} の通信が切れました（タイマー停止中）`; btn("相手を待つ", "primary", hostWait); btn("待たずに続ける", "", hostNoWait); }
+      else if (vs.isHost) { msg = `${names} の復帰を待っています…（タイマー停止中）`; btn("待つのをやめて続ける", "", hostNoWait); }
+      else msg = `${names} の通信が切れました。復帰を待っています（タイマー停止中）`;
+    }
+    b.hidden = !msg; b.classList.toggle("warn", warn); txt.textContent = msg;
+  }
+  // ホーム画面の「前の対戦に戻る」
+  function renderResumeCard() {
+    const snap = loadResume(SNAP_KEY), rj = loadResume(REJOIN_KEY);
+    const it = snap && (!rj || snap.at >= rj.at) ? { host: true, ...snap } : rj ? { host: false, ...rj } : null;
+    $("resume-card").hidden = !it || !!vs.peer;
+    if (!it) return;
+    $("resume-text").textContent = it.host
+      ? `ルーム ${it.code} の${it.H.status === "playing" ? "対戦" : "ルーム"}（あなたがホスト）に戻れます`
+      : `ルーム ${it.room} に戻れます（相手がまだルームにいれば、対戦かルームに復帰します）`;
+    $("btn-resume").onclick = () => {
+      if (it.host) {
+        openLobby(); lobbyStatus("ルームを元に戻しています…");
+        tryHostCode(0, it.name, { code: it.code, restore: it.H, mode: it.H.mode, randomMulti: it.H.randomMulti,
+          onFail: (e) => { lobbyStatus("ルームを元に戻せませんでした（" + e.type + "）。"); clearResume(); } });
+      } else rejoin();
+      $("resume-card").hidden = true;
+    };
   }
 
   // ---- shared
@@ -805,8 +992,14 @@ window.GAME_START = () => {
     releaseMatchHold();
     if (vs.host) clearTimeout(vs.host.autoTimer);
     if (match.active) matchReset();
-    try { vs.conn && vs.conn.close(); } catch {}
-    try { vs.peer && vs.peer.destroy(); } catch {}
+    clearResume(); clearTimeout(rejoinTimer);
+    // 自分で抜けたことを伝えてから切る（通信切れと区別するため）
+    const oldPeer = vs.peer, oldConn = vs.conn;
+    if (vs.isHost && vs.host) vs.host.players.forEach((p) => { if (p.conn && p.connected) hostSend(p.conn, { t: "closed" }); });
+    else if (oldConn && oldConn.open) { try { oldConn.send({ t: "leave" }); } catch {} }
+    setTimeout(() => { try { oldConn && oldConn.close(); } catch {} try { oldPeer && oldPeer.destroy(); } catch {} }, 300);
+    vs.lost = false; vs.rejoining = false; vs.hostOffline = false;
+    $("conn-banner").hidden = true;
     vs.peer = null; vs.conn = null; vs.host = null; vs.pub = null; vs.isHost = false; vs.code = null; vs.me = -1; vs.myTopic = null;
     lastStatus = null;
     $("topbar-status").textContent = "";
@@ -820,7 +1013,7 @@ window.GAME_START = () => {
       const dot = el("span", "pdot"); dot.style.setProperty("--c", PLAYER_COLORS[i % PLAYER_COLORS.length]); li.appendChild(dot);
       li.appendChild(el("span", null, p.name + (i === 0 ? "（ホスト）" : "")));
       const setter = i === pub.setter && pub.setterPicked !== false;   // ランダム対戦（複数人）は3人そろうまで出題者なし
-      const tag = !p.connected ? "切断" : p.out ? (p.outWhy === "g" ? "回答切れ" : p.outWhy === "t" ? "時間切れで降参" : "降参") : setter ? (i === vs.me ? "出題者（あなた）" : "出題者") : i === vs.me ? "あなた" : "";
+      const tag = !p.connected ? (p.dropped ? "通信切れ" : "切断") : p.out ? (p.outWhy === "g" ? "回答切れ" : p.outWhy === "t" ? "時間切れで降参" : p.outWhy === "d" ? "切断（離脱）" : "降参") : setter ? (i === vs.me ? "出題者（あなた）" : "出題者") : i === vs.me ? "あなた" : "";
       if (p.stats && (p.stats.hit || p.stats.esc)) li.appendChild(el("span", "p-stats", (p.stats.hit ? `🎯${p.stats.hit}` : "") + (p.stats.esc ? ` 🛡️${p.stats.esc}` : "")));
       if (pub.status === "playing" && pub.per && !setter && p.left && !p.out) li.appendChild(el("span", "p-left", `回答残り${p.left.g}`));
       if (tag) li.appendChild(el("span", "ptag", tag));
@@ -922,8 +1115,9 @@ window.GAME_START = () => {
     // ブロック中の相手がホストのルームには居続けない
     if (!vs.isHost && pub.players[0] && SOCIAL.isBlocked(pub.players[0].code)) { leaveVersus(); openLobby(); lobbyStatus("ブロック中の相手のルームだったため退出しました。"); return; }
     renderChat(pub);
+    renderConnBanner();
     if (pub.status === "lobby") {
-      if (lastStatus && lastStatus !== "lobby") { stopTimer(); showScreen("lobby"); enterRoomView(); }
+      if ($("screen-lobby").hidden) { stopTimer(); showScreen("lobby"); enterRoomView(); }
       renderLobby(pub);
       SOCIAL.refresh();   // 招待ボタンの出し分け
       lastStatus = "lobby";
@@ -967,7 +1161,7 @@ window.GAME_START = () => {
       who.className = "turn-who" + (mine || (meSetter && waiting) ? " me" : "");
 
       // 出題者：返事／判定パネル
-      const showAns = meSetter && waiting;
+      const showAns = meSetter && waiting && !pub.paused;
       $("answer-panel").hidden = !showAns;
       if (showAns) {
         const last = pub.log[pub.log.length - 1];
@@ -987,7 +1181,7 @@ window.GAME_START = () => {
       }
       // 回答者：手番パネル
       const g = $("genre"); g.hidden = !pub.hint; if (pub.hint) g.textContent = "ジャンル：" + pub.hint;
-      const canAct = mine && !meOut && !meSetter;
+      const canAct = mine && !meOut && !meSetter && !pub.paused;
       $("act-panel").hidden = !canAct;
       if (canAct) {
         const avail = { bias: myLeft.b !== 0, free: myLeft.f > 0, guess: myLeft.g > 0 };
@@ -996,7 +1190,9 @@ window.GAME_START = () => {
         $("tab-free-left").textContent = `残り${myLeft.f}`;
         $("tab-guess-left").textContent = `残り${myLeft.g}`;
         document.querySelectorAll(".act-tab").forEach((b) => { b.disabled = !avail[b.dataset.act]; });
-        setActTab(actTab, lastStatus !== "playing:" + pub.turnNo + ":" + pub.phase);
+        const newTurn = lastStatus !== "playing:" + pub.turnNo + ":" + pub.phase;
+        if (newTurn || !shownIdeas.length) pickIdeas();
+        setActTab(actTab, newTurn);
         $("act-note").textContent = "偏見・自由質問・回答のどれか1つで手番が終わります。";
       }
       lastStatus = "playing:" + pub.turnNo + ":" + pub.phase;
@@ -1007,6 +1203,50 @@ window.GAME_START = () => {
       if (lastStatus !== "finished") showEnd(pub, meSetter);
       lastStatus = "finished";
     }
+  }
+  // ---- 偏見の候補（bias-ideas.js からランダムで3つ。一度選んだものはこの端末では出さない）
+  const IDEAS = (window.BIAS_IDEAS || []).filter((s, i, a) => s && a.indexOf(s) === i);
+  const USED_IDEAS_KEY = CFG.id + ".usedIdeas";
+  let usedIdeas = new Set();
+  try { usedIdeas = new Set(JSON.parse(localStorage.getItem(USED_IDEAS_KEY) || "[]")); } catch {}
+  let shownIdeas = [];
+  function ideaPool() {
+    const asked = new Set((vs.pub ? vs.pub.log : []).filter((x) => x.k === "b").map((x) => textNorm(x.q)));
+    const ok = (s) => !asked.has(textNorm(s)) && !shownIdeas.includes(s);
+    let pool = IDEAS.filter((s) => !usedIdeas.has(s) && ok(s));
+    if (pool.length < 3 && IDEAS.length) {   // 使い切ったら最初から
+      usedIdeas.clear(); try { localStorage.removeItem(USED_IDEAS_KEY); } catch {}
+      pool = IDEAS.filter(ok);
+    }
+    return pool;
+  }
+  function pickIdeas() {
+    const pool = ideaPool();   // いま出ている候補は除いて選ぶ
+    shownIdeas = [];
+    while (shownIdeas.length < 3 && pool.length) shownIdeas.push(pool.splice(randInt(pool.length), 1)[0]);
+    renderIdeas();
+  }
+  function renderIdeas() {
+    const box = $("bias-ideas"); box.innerHTML = "";
+    if (!IDEAS.length) { box.hidden = true; return; }
+    box.hidden = false;
+    box.appendChild(el("span", "ideas-label", "候補"));
+    shownIdeas.forEach((s) => {
+      const b = el("button", "idea-chip", s + "そう"); b.type = "button";
+      b.addEventListener("click", () => {
+        $("bias-input").value = s;
+        usedIdeas.add(s); try { localStorage.setItem(USED_IDEAS_KEY, JSON.stringify([...usedIdeas])); } catch {}
+        // 選んだ候補は新しいものに入れ替える
+        const pool = ideaPool();
+        shownIdeas = shownIdeas.map((x) => (x === s ? (pool.length ? pool[randInt(pool.length)] : null) : x)).filter(Boolean);
+        renderIdeas();
+        $("bias-input").focus();
+      });
+      box.appendChild(b);
+    });
+    const r = el("button", "idea-chip reroll", "🔄 ほかの候補"); r.type = "button";
+    r.addEventListener("click", pickIdeas);
+    box.appendChild(r);
   }
   function setActTab(k, focus) {
     actTab = k;
@@ -1093,6 +1333,7 @@ window.GAME_START = () => {
     if (vs.isHost) hostTick();
     const pub = vs.pub;
     const t = $("turn-timer");
+    if (pub && pub.status === "playing" && (pub.paused || vs.lost)) { t.textContent = "⏸ 停止中"; t.className = "turn-timer"; return; }
     if (!pub || pub.status !== "playing" || !vs.deadlineLocal) { t.textContent = pub && pub.status === "playing" ? "制限なし" : ""; t.className = "turn-timer"; return; }
     const left = vs.deadlineLocal - Date.now();
     t.textContent = fmtClock(left);
@@ -1195,6 +1436,9 @@ window.GAME_START = () => {
     // フレンド状態が変わったら参加者一覧のボタンを更新
     onChange: () => { if (vs.pub && vs.pub.status === "lobby") renderPlayers($("lobby-players"), vs.pub, true); },
   });
+  $("btn-resume-discard").addEventListener("click", () => { clearResume(); renderResumeCard(); });
+  renderResumeCard();
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && vs.lost && !vs.rejoining) rejoin(); });
   const roomParam = new URLSearchParams(location.search).get("room");
   if (roomParam && /^\d{6}$/.test(roomParam)) openLobby(roomParam);
 };

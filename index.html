@@ -25,6 +25,11 @@
   </div>
 </header>
 
+<div class="conn-banner" id="conn-banner" hidden>
+  <div class="conn-text" id="conn-text"></div>
+  <div class="conn-actions" id="conn-actions"></div>
+</div>
+
 <main id="app">
 
   <!-- ===== ホーム ===== -->
@@ -36,6 +41,14 @@
         <span class="bias-bubble">「<b id="hero-example"></b>」そうですか？</span>
       </div>
       <p class="lead">出題者がこっそりお題（キャラ・有名人・身近な人など何でもOK）を1つ決めます。回答者は<b>「〇〇そうですか？」</b>と<b>偏見</b>をぶつけて絞り込み、正体を当てたら勝ち！</p>
+    </div>
+
+    <div class="card resume-card" id="resume-card" hidden>
+      <div><b>🔌 前の対戦に戻る</b><div class="muted" id="resume-text"></div></div>
+      <div class="row">
+        <button class="btn primary" id="btn-resume" type="button">対戦に戻る</button>
+        <button class="btn small" id="btn-resume-discard" type="button">戻らない</button>
+      </div>
     </div>
 
     <div class="mode-grid one">
@@ -62,6 +75,7 @@
           <tr><th>フレンド</th><td>右上の「👥 フレンド」からフレンドコードで追加、個人チャット、ルームへの招待ができます。ルームの参加者一覧からも申請・ブロックできます。チャットは相手もサイトを開いているときだけ届き、フレンド一覧と会話はこの端末にだけ保存されます。</td></tr>
         </tbody></table>
         <p class="note">回答者が複数いるときは順番に1手ずつ（偏見・自由質問・回答のどれか1つ）。複数人のときの回数は、ルームの設定で「1人ずつ」か「全員合計」です。各手番には制限時間があります。出題者が時間切れのときは「どっちとも／わからない」扱い。回答者が時間切れのときは偏見を1回消費し（無制限ならパス）、3回連続で時間切れになると降参扱いです。</p>
+        <p class="note">偏見の入力欄には候補が3つ出ます（一度選んだ候補はこの端末では出ません）。通信が切れたときは画面上の「対戦に戻る」で復帰できます。ページを閉じてしまっても、3時間以内ならホーム画面の「前の対戦に戻る」から戻れます。切れていない側は「相手を待つ」を選ぶと、戻ってくるまでタイマーが止まります。</p>
       </div>
     </details>
   </section>
@@ -206,6 +220,7 @@
         <button type="button" class="act-tab" data-act="guess">🎯 回答<small id="tab-guess-left"></small></button>
       </div>
       <div class="act-body" id="act-bias">
+        <div class="bias-ideas" id="bias-ideas"></div>
         <div class="bias-input">
           <span class="bq">「</span>
           <input id="bias-input" class="text" maxlength="60" autocomplete="off">
@@ -336,7 +351,7 @@
 <footer class="foot" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
-<script>["config.js","social.js","app.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>["config.js","bias-ideas.js","social.js","app.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
 <script>window.GAME_START();</script>
 </body>
 </html>

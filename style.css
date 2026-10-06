@@ -470,3 +470,17 @@ select.text { appearance: auto; }
 /* 時間切れの行 */
 .qa-item.timeout { border-left: 6px solid var(--miss); background: var(--bg-2); }
 .qa-item.timeout .qa-no { color: #fff; background: var(--miss); padding: 1px 7px; border-radius: 999px; }
+
+/* 通信切れのお知らせ・前の対戦に戻る */
+.conn-banner { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; background: #fff3cd; border-bottom: 1px solid var(--accent-2); font-weight: 800; font-size: 14px; }
+.conn-banner.warn { background: #fde2e6; border-color: #f0aab5; }
+.conn-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.resume-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; border: 2px solid var(--accent-2); }
+.resume-card .row { display: flex; gap: 8px; align-items: center; }
+
+/* 偏見の候補 */
+.bias-ideas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.ideas-label { font-size: 11px; font-weight: 900; color: var(--muted); }
+.idea-chip { font: inherit; font-size: 13px; font-weight: 800; padding: 5px 10px; border-radius: 999px; border: 1px solid #c9d6f5; background: #e8efff; color: var(--navy); cursor: pointer; }
+.idea-chip:hover { background: #d6e2ff; }
+.idea-chip.reroll { background: var(--panel); border-color: var(--line); color: var(--muted); font-size: 12px; }
