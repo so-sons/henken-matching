@@ -1219,7 +1219,7 @@ window.GAME_START = () => {
     const area = $("stamp-area");
     const st = el("div", "stamp-pop");
     st.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
-    st.style.left = 12 + Math.random() * 56 + "%";
+    st.style.left = (STAMPS[m.k].length > 6 ? 50 : 25 + Math.random() * 50) + "%";   // 長いスタンプは真ん中に（画面からはみ出さないように）
     st.appendChild(el("div", "stamp-text", STAMPS[m.k]));
     st.appendChild(el("div", "stamp-by", m.p === vs.me ? "あなた" : m.name));
     area.appendChild(st);
