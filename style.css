@@ -561,3 +561,9 @@ select.text { appearance: auto; }
 .tut-dot.on { background: var(--navy-2); width: 22px; border-radius: 999px; }
 .tut-nav { display: flex; justify-content: space-between; gap: 8px; }
 .tut-nav .btn { flex: 1; }
+
+/* 注意書き・フッターのリンク */
+.safety-note { font-size: 12px; background: #fff3cd; border: 1px solid var(--accent-2); border-radius: var(--radius-s); padding: 6px 10px; margin: 6px 0 8px; }
+.chat-warn { font-size: 11px; color: #8a5a00; margin: 0 0 6px; }
+.foot-links { margin: 0 0 8px; }
+.foot-links a { color: var(--muted); font-weight: 700; }

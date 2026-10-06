@@ -10,7 +10,8 @@ window.GAME_START = () => {
   const $ = (id) => document.getElementById(id);
   const PEER_PREFIX = CFG.id + "-";
   const PLAYER_COLORS = ["#e0a800", "#1e88e5", "#e53976", "#2e9e4f"];
-  const MAX_PLAYERS = CFG.maxPlayers || 8;      // 複数人モードの最大人数
+  const MAX_PLAYERS = CFG.maxPlayers || 8;
+  const ng = window.ngFilter || ((t) => t);   // NGワードを「＊」で隠す（ngwords.js）      // 複数人モードの最大人数
   const RANDOM_MULTI_MAX = 5;
   const TIMEOUT_OUT = 3;                        // 回答者が連続でこの回数だけ時間切れになったら降参扱い                   // ランダム対戦（複数人）の最大人数
   const MODE_LABEL = { duel: "1対1", multi: "複数人" };
@@ -64,6 +65,10 @@ window.GAME_START = () => {
     $("topic-input").placeholder = "お題（例：" + (CFG.topicExample || "") + "）";
     $("hint-input").placeholder = "ジャンル・任意（例：" + (CFG.hintExample || "") + "）※回答者に見えます";
     const foot = $("foot"); foot.textContent = "";
+    const links = el("p", "foot-links");
+    const a1 = el("a", null, "利用規約・プライバシー"); a1.href = "terms.html"; links.appendChild(a1);
+    if (CFG.contact && CFG.contact.url) { const a2 = el("a", null, CFG.contact.label || "お問い合わせ"); a2.href = CFG.contact.url; a2.target = "_blank"; a2.rel = "noopener"; links.append("　", a2); }
+    foot.appendChild(links);
     if (CFG.support && CFG.support.url) {
       const p = el("p", "support");
       const a = el("a", "btn small", CFG.support.label || "開発者を応援する"); a.href = CFG.support.url; a.target = "_blank"; a.rel = "noopener";
@@ -217,7 +222,7 @@ window.GAME_START = () => {
       if (H.status !== "lobby") { hostSend(conn, { t: "error", msg: "対戦中のため参加できません。次のゲームまでお待ちください。", fatal: true }); return; }
       const cap = roomCap(H);
       if (H.players.filter((p) => p.connected).length >= cap) { hostSend(conn, { t: "error", msg: "満員です（最大" + cap + "人）", fatal: true }); return; }
-      const name = String(msg.name || "プレイヤー").slice(0, 12);
+      const name = ng(String(msg.name || "プレイヤー").slice(0, 12));
       const code = validCode(msg.code);
       if (code && SOCIAL.isBlocked(code)) { hostSend(conn, { t: "error", msg: "このルームには参加できません", fatal: true }); setTimeout(() => { try { conn.close(); } catch {} }, 300); return; }
       H.players.push(newPlayer(name, conn, code));
@@ -371,7 +376,7 @@ window.GAME_START = () => {
   }
   function hostChat(pIdx, text) {
     const H = vs.host; const p = H && H.players[pIdx]; if (!p) return;
-    text = String(text || "").replace(/\s+/g, " ").trim().slice(0, 100);
+    text = ng(String(text || "").replace(/\s+/g, " ").trim().slice(0, 100));
     if (!text) return;
     const now = Date.now(); p.chatTs = (p.chatTs || []).filter((t) => now - t < 5000);
     if (p.chatTs.length >= 5) { errTo(pIdx, "送信が早すぎます。少し待ってください"); return; }
@@ -462,8 +467,8 @@ window.GAME_START = () => {
   }
   const cleanTopic = (t) => {
     if (!t || typeof t !== "object") return null;
-    const name = String(t.name || "").replace(/\s+/g, " ").trim().slice(0, 40);
-    const hint = String(t.hint || "").replace(/\s+/g, " ").trim().slice(0, 30);
+    const name = ng(String(t.name || "").replace(/\s+/g, " ").trim().slice(0, 40));
+    const hint = ng(String(t.hint || "").replace(/\s+/g, " ").trim().slice(0, 30));
     return name ? { name, hint } : null;
   };
   function hostSetTopic(t) {
@@ -560,7 +565,7 @@ window.GAME_START = () => {
     const H = vs.host;
     if (H.status !== "playing" || H.paused || H.phase !== "ask" || H.turn !== pIdx || !eligible(H, pIdx)) return;
     if (k !== "b" && k !== "f") return;
-    q = k === "b" ? normBias(q) : normFree(q);
+    q = ng(k === "b" ? normBias(q) : normFree(q));
     if (!q) return;
     const L = pool(H, pIdx);
     if (k === "b" && L.b <= 0) { errTo(pIdx, "偏見の回数がもうありません"); return; }
@@ -1095,7 +1100,7 @@ window.GAME_START = () => {
     pub.players.forEach((p, i) => {
       const li = el("li", (i === vs.me ? "me " : "") + (pub.status === "playing" && pub.turn === i && pub.phase === "ask" ? "turn " : "") + (!p.connected || p.out ? "offline" : ""));
       const dot = el("span", "pdot"); dot.style.setProperty("--c", PLAYER_COLORS[i % PLAYER_COLORS.length]); li.appendChild(dot);
-      li.appendChild(el("span", null, p.name + (i === 0 ? "（ホスト）" : "")));
+      li.appendChild(el("span", null, ng(p.name) + (i === 0 ? "（ホスト）" : "")));
       const setter = i === pub.setter && pub.setterPicked !== false;   // ランダム対戦（複数人）は3人そろうまで出題者なし
       const tag = !p.connected ? (p.dropped ? "通信切れ" : "切断") : p.out ? (p.outWhy === "g" ? "回答切れ" : p.outWhy === "t" ? "時間切れで降参" : p.outWhy === "d" ? "切断（離脱）" : "降参") : setter ? (i === vs.me ? "出題者（あなた）" : "出題者") : i === vs.me ? "あなた" : "";
       if (p.stats && (p.stats.hit || p.stats.esc)) li.appendChild(el("span", "p-stats", (p.stats.hit ? `🎯${p.stats.hit}` : "") + (p.stats.esc ? ` 🛡️${p.stats.esc}` : "")));
@@ -1172,6 +1177,7 @@ window.GAME_START = () => {
     const slot = $(pub.status === "lobby" ? "lobby-chat-slot" : "game-chat-slot");
     if (box.parentNode !== slot) slot.appendChild(box);
     box.hidden = false;
+    $("chat-warn").hidden = !pub.fromRandom;
     const chat = pub.chat || [];
     const key = chat.length + ":" + (chat.length ? chat[chat.length - 1].ts : 0) + ":" + chat.map((m) => (SOCIAL.isBlocked(m.code) ? "b" : "")).join("");
     if (key === chatKey) return;
@@ -1180,8 +1186,8 @@ window.GAME_START = () => {
     ol.innerHTML = "";
     chat.filter((m) => !SOCIAL.isBlocked(m.code)).forEach((m) => {
       const li = el("li");
-      const nm = el("span", "cn", m.name); nm.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
-      li.append(nm, document.createTextNode(m.text));
+      const nm = el("span", "cn", ng(m.name)); nm.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
+      li.append(nm, document.createTextNode(ng(m.text)));
       ol.appendChild(li);
     });
     $("chat-empty").hidden = ol.children.length > 0;
@@ -1193,8 +1199,8 @@ window.GAME_START = () => {
   function popChat(m) {
     const area = $("pop-area");
     const card = el("div", "pop-chat");
-    const nm = el("b", null, m.name); nm.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
-    card.append("💬 ", nm, el("span", null, m.text));
+    const nm = el("b", null, ng(m.name)); nm.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
+    card.append("💬 ", nm, el("span", null, ng(m.text)));
     card.addEventListener("click", () => { card.remove(); $("room-chat").scrollIntoView({ behavior: "smooth", block: "center" }); $("chat-input").focus(); });
     area.appendChild(card);
     while (area.children.length > 3) area.firstChild.remove();
@@ -1219,7 +1225,7 @@ window.GAME_START = () => {
     st.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
     st.style.left = (STAMPS[m.k].length > 6 ? 50 : 25 + Math.random() * 50) + "%";   // 長いスタンプは真ん中に（画面からはみ出さないように）
     st.appendChild(el("div", "stamp-text", STAMPS[m.k]));
-    st.appendChild(el("div", "stamp-by", m.p === vs.me ? "あなた" : m.name));
+    st.appendChild(el("div", "stamp-by", m.p === vs.me ? "あなた" : ng(m.name)));
     area.appendChild(st);
     while (area.children.length > 6) area.firstChild.remove();
     setTimeout(() => st.remove(), 2200);
@@ -1410,7 +1416,7 @@ window.GAME_START = () => {
       const dot = el("span", "pdot"); dot.style.setProperty("--c", PLAYER_COLORS[x.p % PLAYER_COLORS.length]); head.appendChild(dot);
       head.appendChild(el("span", "qa-no", x.k === "b" ? `偏見${++bn}` : x.k === "f" ? `質問${++fn}` : "回答"));
       head.appendChild(el("span", "qa-by", by));
-      head.appendChild(el("span", "qa-text", x.k === "b" ? biasText(x.q) : x.q));
+      head.appendChild(el("span", "qa-text", ng(x.k === "b" ? biasText(x.q) : x.q)));
       li.appendChild(head);
       if (x.k === "g") { const j = JUDGES.find((y) => y.k === x.r); li.appendChild(el("div", "qa-a " + (j ? j.cls : "pending"), j ? j.label : "判定中…")); }
       else li.appendChild(el("div", "qa-a " + (x.a || "pending"), x.a ? answerLabel(x.k, x.a) : "考え中…"));

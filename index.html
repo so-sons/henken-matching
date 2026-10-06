@@ -4,7 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>偏見マッチング</title>
-<meta name="description" content="「〇〇そうですか？」と偏見で質問して、出題者が決めたお題を当てる対戦ゲーム。">
+<meta name="description" content="「〇〇そうですか？」と偏見をぶつけて、出題者が決めたお題の正体を当てる対戦ゲーム。友達とルームで、またはランダム対戦で2〜8人まで遊べます。登録不要・無料。">
+<link rel="canonical" href="https://so-sons.github.io/henken-matching/">
+<meta name="theme-color" content="#14307a">
+<!-- SNS でシェアしたときのカード -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="偏見マッチング">
+<meta property="og:title" content="偏見マッチング｜「〇〇そうですか？」偏見でお題を当てよう">
+<meta property="og:description" content="偏見をぶつけて、お題の正体を当てる対戦ゲーム。友達と・ランダム対戦で2〜8人。登録不要・無料。">
+<meta property="og:url" content="https://so-sons.github.io/henken-matching/">
+<meta property="og:image" content="https://so-sons.github.io/henken-matching/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="偏見マッチング｜「〇〇そうですか？」偏見でお題を当てよう">
+<meta name="twitter:description" content="偏見をぶつけて、お題の正体を当てる対戦ゲーム。友達と・ランダム対戦で2〜8人。">
+<meta name="twitter:image" content="https://so-sons.github.io/henken-matching/og.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
@@ -100,6 +116,7 @@
     <div class="card match-card" id="lobby-match">
       <h3>ランダム対戦</h3>
       <p class="muted">コード不要。相手を探している人と自動でマッチしてルームに入ります。</p>
+      <p class="safety-note">⚠️ 知らない人とマッチします。本名・学校・住所・SNSのIDなどの<b>個人情報は書かない</b>でください。嫌な相手はブロックできます。</p>
       <div class="seg room-mode-seg" role="radiogroup">
         <label><input type="radio" name="matchmode" value="duel" checked><span>1対1<small>2人。出題者は最初ランダム、あとは交互</small></span></label>
         <label><input type="radio" name="matchmode" value="multi"><span>複数人<small>3〜5人。出題者はランダムで決まり、試合ごとに交代</small></span></label>
@@ -364,6 +381,7 @@
   <div class="stamp-bar" id="stamp-bar" aria-label="スタンプ"></div>
   <ol class="chat-list" id="chat-list"></ol>
   <p class="chat-empty muted" id="chat-empty">まだメッセージはありません</p>
+  <p class="chat-warn" id="chat-warn" hidden>⚠️ 知らない人とのチャットです。個人情報は書かないでください</p>
   <div class="guess-input-wrap">
     <input id="chat-input" class="text" maxlength="100" placeholder="メッセージ（ルームの全員に見えます）" autocomplete="off">
     <button class="btn" id="chat-send" type="button">送信</button>
@@ -451,7 +469,7 @@
 <footer class="foot" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
-<script>["config.js","bias-ideas.js","social.js","app.js","tutorial.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>["config.js","ngwords.js","bias-ideas.js","social.js","app.js","tutorial.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
 <script>window.GAME_START();</script>
 </body>
 </html>

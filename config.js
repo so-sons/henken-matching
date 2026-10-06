@@ -13,6 +13,9 @@ window.GAME_CONFIG = {
   kicker: "HENKEN MATCHING",
   heroTitle: "「〇〇そうですか？」\n偏見でお題を当てよう",
 
+  // --- お問い合わせ・通報の窓口（ページ下部と利用規約に表示。Google フォームなどに変えてもよい） ---
+  contact: { label: "お問い合わせ・通報", url: "https://github.com/so-sons/henken-matching/issues" },
+
   // --- 投げ銭（ページ下部に表示。不要なら消す） ---
   support: { label: "☕ OFUSEで開発者を応援する", url: "https://ofuse.me/ea96441a", note: "サイトの維持・機能追加の励みになります" },
 

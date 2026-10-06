@@ -23,7 +23,8 @@ window.SOCIAL_START = (app) => {
   const unb64 = (s) => Uint8Array.from(atob(String(s || "")), (c) => c.charCodeAt(0));
   const fmtCode = (c) => (c ? c.slice(0, 5) + "-" + c.slice(5) : "");
   const normCode = (s) => String(s || "").toUpperCase().replace(/[^A-Z2-9]/g, "");
-  const cleanName = (n) => String(n || "").replace(/\s+/g, " ").trim().slice(0, 12) || "プレイヤー";
+  const ng = window.ngFilter || ((t) => t);
+  const cleanName = (n) => ng(String(n || "").replace(/\s+/g, " ").trim().slice(0, 12)) || "プレイヤー";
   const EC = { name: "ECDSA", namedCurve: "P-256" };
   const SIG = { name: "ECDSA", hash: "SHA-256" };
   async function codeOf(rawPub) {
@@ -204,7 +205,7 @@ window.SOCIAL_START = (app) => {
         if (!isFriend(code)) return;
         if (!settings.acceptChat) { st.conn.send({ t: "msgoff" }); return; }
         const text = String(m.text || "").replace(/\s+/g, " ").trim().slice(0, 300);
-        if (text) receive(code, { me: false, text, ts: now });
+        if (text) receive(code, { me: false, text: ng(text), ts: now });
         return;
       }
       case "invite": {
