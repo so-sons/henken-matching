@@ -79,8 +79,9 @@ window.GAME_START = () => {
     ["home", "lobby", "game"].forEach((s) => ($("screen-" + s).hidden = s !== name));
     window.scrollTo(0, 0);
   }
+  // ホームへ：ルーム・対戦からは「一時的に抜ける」扱い（相手からは通信切れに見え、ホームの「前の対戦に戻る」で戻れる）
   function goHome() {
-    leaveVersus();
+    leaveVersus(true);
     stopTimer();
     $("topbar-status").textContent = "";
     showScreen("home");
@@ -166,7 +167,7 @@ window.GAME_START = () => {
       if (settled) { vs.hostOffline = false; renderConnBanner(); return; }   // サーバーへの再接続：ルームはそのまま
       settled = true;
       vs.peer = peer; vs.isHost = true; vs.code = code; vs.me = 0;
-      vs.host = ov.restore ? restoreHostState(ov.restore) : {
+      vs.host = ov.restore ? restoreHostState(ov.restore, ov.restoreAt) : {
         mode: ov.mode === "multi" ? "multi" : "duel",   // duel=1対1 / multi=複数人（ルーム作成時に決める）
         randomMulti: !!ov.randomMulti,                  // ランダム対戦（複数人）のルーム：自動で出題者決定・開始・次の試合
         players: [newPlayer(name, null, SOCIAL.myCode())],
@@ -346,7 +347,8 @@ window.GAME_START = () => {
   const loadResume = (k) => { try { const v = JSON.parse(localStorage.getItem(k) || "null", unInf); return v && Date.now() - v.at < RESUME_TTL ? v : null; } catch { return null; } };
   const clearResume = () => { try { localStorage.removeItem(SNAP_KEY); localStorage.removeItem(REJOIN_KEY); } catch {} };
   // 保存しておいた状態からルームを作り直す（参加者はまだ戻っていないので、対戦中なら一時停止して待つ）
-  function restoreHostState(R) {
+  // at: 保存した時刻。ホストがいなかった間はタイマーを進めない
+  function restoreHostState(R, at) {
     const H = R;
     H.autoTimer = null; H.autoStartPending = false;
     H.players.forEach((p, i) => {
@@ -360,7 +362,7 @@ window.GAME_START = () => {
       H.players = [H.players[0]]; H.setter = 0;
     }
     if (H.status === "playing" && H.players.some((p) => p.dropped)) {
-      H.pausedLeft = H.paused ? H.pausedLeft : (H.deadline ? Math.max(5000, H.deadline - Date.now()) : null);
+      H.pausedLeft = H.paused ? H.pausedLeft : (H.deadline ? Math.max(5000, H.deadline - (at || Date.now())) : null);
       H.paused = true; H.deadline = null; H.waitChoice = "wait";
     }
     return H;
@@ -972,7 +974,7 @@ window.GAME_START = () => {
     $("btn-resume").onclick = () => {
       if (it.host) {
         openLobby(); lobbyStatus("ルームを元に戻しています…");
-        tryHostCode(0, it.name, { code: it.code, restore: it.H, mode: it.H.mode, randomMulti: it.H.randomMulti,
+        tryHostCode(0, it.name, { code: it.code, restore: it.H, restoreAt: it.at, mode: it.H.mode, randomMulti: it.H.randomMulti,
           onFail: (e) => { lobbyStatus("ルームを元に戻せませんでした（" + e.type + "）。"); clearResume(); } });
       } else rejoin();
       $("resume-card").hidden = true;
@@ -987,16 +989,21 @@ window.GAME_START = () => {
     lobbyStatus("");
     $("topbar-status").textContent = "ルーム " + vs.code;
   }
-  function leaveVersus() {
+  // keep=true：あとで戻れるように、戻る情報を残して相手には何も伝えずに切る（ホームへ）
+  // keep=false：完全に抜ける（退出ボタンなど）。自分で抜けたことを伝えてから切る（通信切れと区別するため）
+  function leaveVersus(keep) {
     stopTimer();
     releaseMatchHold();
     if (vs.host) clearTimeout(vs.host.autoTimer);
     if (match.active) matchReset();
-    clearResume(); clearTimeout(rejoinTimer);
-    // 自分で抜けたことを伝えてから切る（通信切れと区別するため）
+    clearTimeout(rejoinTimer);
     const oldPeer = vs.peer, oldConn = vs.conn;
-    if (vs.isHost && vs.host) vs.host.players.forEach((p) => { if (p.conn && p.connected) hostSend(p.conn, { t: "closed" }); });
-    else if (oldConn && oldConn.open) { try { oldConn.send({ t: "leave" }); } catch {} }
+    if (keep && vs.isHost) saveHostSnap();   // 抜けた瞬間の状態（タイマーの残り）を保存
+    if (!keep || !vs.code) {
+      clearResume();
+      if (vs.isHost && vs.host) vs.host.players.forEach((p) => { if (p.conn && p.connected) hostSend(p.conn, { t: "closed" }); });
+      else if (oldConn && oldConn.open) { try { oldConn.send({ t: "leave" }); } catch {} }
+    }
     setTimeout(() => { try { oldConn && oldConn.close(); } catch {} try { oldPeer && oldPeer.destroy(); } catch {} }, 300);
     vs.lost = false; vs.rejoining = false; vs.hostOffline = false;
     $("conn-banner").hidden = true;
@@ -1366,7 +1373,7 @@ window.GAME_START = () => {
   // 共有リンクは常に公開URL（config.siteUrl）。古いURLやキャッシュから開いていても最新のURLを教えられるように。ローカル確認中だけは今のURL
   const appLink = (extra) => `${CFG.siteUrl && !/^(localhost|127\.)/.test(location.hostname) ? CFG.siteUrl : location.origin + location.pathname}${extra || ""}`;
   $("brand-btn").addEventListener("click", () => {
-    if (vs.pub && vs.pub.status === "playing") armConfirm($("btn-back-home"), "本当に退出？（もう一度押す）", goHome);
+    if (vs.pub && vs.pub.status === "playing") armConfirm($("btn-back-home"), "ホームへ？（もう一度押す・あとで戻れます）", goHome);
     else goHome();
   });
   $("btn-versus").addEventListener("click", () => openLobby());
@@ -1387,7 +1394,7 @@ window.GAME_START = () => {
     btn._t = setTimeout(() => { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; }, 3000);
   }
   $("btn-back-home").addEventListener("click", () => {
-    if (vs.pub && vs.pub.status === "playing") armConfirm($("btn-back-home"), "本当に退出？（もう一度押す）", goHome);
+    if (vs.pub && vs.pub.status === "playing") armConfirm($("btn-back-home"), "ホームへ？（もう一度押す・あとで戻れます）", goHome);
     else goHome();
   });
   $("btn-surrender").addEventListener("click", () => armConfirm($("btn-surrender"), "本当に降参？（もう一度押す）", sendSurrender));
@@ -1417,7 +1424,7 @@ window.GAME_START = () => {
   $("chat-send").addEventListener("click", sendChat);
   $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendChat(); } });
   $("setter-select").addEventListener("change", () => { if (vs.isHost) hostSetSetter(+$("setter-select").value); });
-  window.addEventListener("beforeunload", () => { try { vs.peer && vs.peer.destroy(); } catch {} });
+  window.addEventListener("beforeunload", () => { if (vs.isHost) saveHostSnap(); try { vs.peer && vs.peer.destroy(); } catch {} });
 
   // ------------------------------------------------------------------ init
   applyConfigText();
