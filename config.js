@@ -18,8 +18,8 @@ window.GAME_CONFIG = {
 
   // --- 入力欄の例 ---
   heroExample: "〇〇",                     // ホーム画面の吹き出し「〇〇」そうですか？
-  biasExample: "淫夢知って",   // 「　」そうですか？ の空欄の例
-  freeExample: "中学生ですか？",           // 自由質問の例
+  biasExample: "運動神経がよさ",           // 「　」そうですか？ の空欄の例
+  freeExample: "男性ですか？",             // 自由質問の例
   topicExample: "ルフィ",                  // お題の例
   hintExample: "アニメキャラ",             // ジャンルの例
 
