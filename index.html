@@ -131,6 +131,7 @@
         <div class="field-label">参加者</div>
         <ul class="players" id="lobby-players"></ul>
       </div>
+      <div id="lobby-chat-slot"></div>
       <div class="field" id="room-options" hidden>
         <div class="field-label">ルールの設定</div>
         <p class="muted" id="room-options-summary"></p>
@@ -185,7 +186,6 @@
         <p class="muted fm-note">画像は正解発表のときに参加者へ表示されます（サイトやサーバーには保存されません）。キャラの画像などは友達同士で楽しむ範囲で使い、実在の人の写真は本人の許可があるものだけにしてください。</p>
       </div>
       <label class="check-row img-setting"><input type="checkbox" id="show-images"> 正解発表でお題の画像を表示する（ランダム対戦ではタップで表示）</label>
-      <div id="lobby-chat-slot"></div>
       <p class="muted" id="lobby-hint"></p>
       <div class="row">
         <button class="btn primary" id="btn-start" type="button" hidden>対戦開始</button>
@@ -212,6 +212,7 @@
 
     <ul class="players inline" id="game-players"></ul>
     <div class="genre" id="genre" hidden></div>
+    <div id="game-chat-slot"></div>
 
     <!-- 出題者：質問に答える -->
     <div class="qa-panel setter" id="answer-panel" hidden>
@@ -264,7 +265,6 @@
       <button class="btn" id="btn-again-same" type="button" hidden>同じ出題者でもう一度</button>
       <button class="btn" id="btn-back-home" type="button">ホームへ</button>
     </div>
-    <div id="game-chat-slot"></div>
     <div class="log" id="game-log"></div>
   </section>
 </main>
@@ -272,6 +272,7 @@
 <!-- ===== ルームチャット（ロビー／ゲーム画面に移動して使う） ===== -->
 <div class="room-chat" id="room-chat" hidden>
   <div class="field-label">💬 ルームチャット</div>
+  <div class="stamp-bar" id="stamp-bar" aria-label="スタンプ"></div>
   <ol class="chat-list" id="chat-list"></ol>
   <p class="chat-empty muted" id="chat-empty">まだメッセージはありません</p>
   <div class="guess-input-wrap">
@@ -354,6 +355,8 @@
   </div>
 </div>
 
+<div class="pop-area" id="pop-area" aria-live="polite"></div>
+<div class="stamp-area" id="stamp-area" aria-hidden="true"></div>
 <div class="toast" id="toast" hidden></div>
 
 <footer class="foot" id="foot"></footer>

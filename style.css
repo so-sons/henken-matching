@@ -452,7 +452,7 @@ select.text { appearance: auto; }
 
 /* ルームチャット */
 .room-chat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px 12px; margin: 12px 0; }
-.chat-list { list-style: none; margin: 6px 0 8px; padding: 0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.chat-list { list-style: none; margin: 6px 0 8px; padding: 0; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .chat-list li { font-size: 14px; word-break: break-word; }
 .chat-list .cn { font-weight: 800; margin-right: 6px; color: var(--c, var(--text)); }
 .chat-list li.sys { color: var(--muted); font-size: 12px; }
@@ -498,3 +498,29 @@ select.text { appearance: auto; }
 .blur-note { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-weight: 900; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
 .answer-img-wrap.blur .blur-note { display: flex; }
 .img-setting { font-size: 12px; color: var(--muted); }
+
+/* スタンプ */
+.stamp-bar { display: flex; gap: 6px; margin: 6px 0 4px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.stamp-btn { flex: none; }
+.stamp-btn { font: inherit; font-weight: 900; font-size: 13px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--accent-2); background: #fff8dc; color: var(--accent-ink); cursor: pointer; }
+.stamp-btn:hover { background: #ffefb0; }
+.stamp-btn:active { transform: scale(.94); }
+.stamp-area { position: fixed; left: 0; right: 0; top: 18%; height: 0; z-index: 70; pointer-events: none; }
+.stamp-pop { position: absolute; transform: translateX(-50%); text-align: center; animation: stampIn 2.2s ease forwards; }
+.stamp-text { font-size: 40px; font-weight: 900; color: #fff; background: var(--c, var(--navy)); padding: 6px 20px; border-radius: 22px; box-shadow: 0 8px 24px rgba(20, 30, 60, .3); white-space: nowrap; border: 3px solid #fff; }
+.stamp-by { margin-top: 4px; font-size: 12px; font-weight: 900; color: var(--text); background: rgba(255, 255, 255, .92); border-radius: 999px; padding: 1px 10px; display: inline-block; }
+@keyframes stampIn {
+  0% { opacity: 0; transform: translate(-50%, 20px) scale(.5); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.15); }
+  20% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, -30px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -60px) scale(.95); }
+}
+@media (max-width: 560px) { .stamp-text { font-size: 30px; } }
+
+/* チャットのポップ */
+.pop-area { position: fixed; right: 14px; bottom: 76px; z-index: 65; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; max-width: min(360px, calc(100vw - 28px)); }
+.pop-chat { background: var(--panel); border: 1px solid var(--line-2); border-left: 5px solid var(--navy-2); border-radius: 14px; padding: 8px 12px; box-shadow: var(--shadow); font-size: 14px; display: flex; gap: 6px; align-items: baseline; cursor: pointer; animation: popIn .25s ease; word-break: break-word; }
+.pop-chat b { color: var(--c, var(--text)); white-space: nowrap; }
+.pop-chat.out { opacity: 0; transform: translateX(20px); transition: opacity .35s, transform .35s; }
+@keyframes popIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }

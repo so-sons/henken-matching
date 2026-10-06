@@ -248,6 +248,7 @@ window.GAME_START = () => {
     else if (msg.t === "judge") { if (pIdx === H.setter) hostJudge(msg.r); }
     else if (msg.t === "surrender") hostSurrender(pIdx);
     else if (msg.t === "chat") hostChat(pIdx, msg.text);
+    else if (msg.t === "stamp") hostStamp(pIdx, msg.k);
     else if (msg.t === "topicimg") { if (pIdx === H.setter) hostSetTopicImg(msg.data); }
   }
   // intent: 自分で退出した（ホームへ・退出ボタン・キック）。false は通信が途切れた
@@ -997,6 +998,7 @@ window.GAME_START = () => {
       try { localStorage.setItem(REJOIN_KEY, JSON.stringify({ at: Date.now(), room: msg.room || vs.code, token: msg.token })); } catch {}
     }
     else if (msg.t === "state") applyState(msg.s);
+    else if (msg.t === "stamp") showStamp(msg);
     else if (msg.t === "img") { if (validImg(msg.data)) { vs.answerImg = msg.data; renderAnswerImg(); } }
     else if (msg.t === "closed") { leaveVersus(); openLobby(); lobbyStatus("ホストがルームを閉じました。"); toast("ホストがルームを閉じました"); }
     else if (msg.t === "error") {
@@ -1086,7 +1088,8 @@ window.GAME_START = () => {
     vs.peer = null; vs.conn = null; vs.host = null; vs.pub = null; vs.isHost = false; vs.code = null; vs.me = -1; vs.myTopic = null;
     lastStatus = null;
     $("topbar-status").textContent = "";
-    $("room-chat").hidden = true; $("chat-list").innerHTML = ""; chatKey = "";
+    $("room-chat").hidden = true; $("chat-list").innerHTML = ""; chatKey = ""; chatSeenTs = null;
+    $("pop-area").innerHTML = ""; $("stamp-area").innerHTML = "";
     SOCIAL.refresh();
   }
   function renderPlayers(ul, pub, withSocial) {
@@ -1165,6 +1168,7 @@ window.GAME_START = () => {
 
   // ルームチャット：ロビーとゲーム画面の置き場所へ移動して表示。ブロック中の相手の発言は出さない
   let chatKey = "";
+  let chatSeenTs = null;   // ポップを出した最後の発言の時刻（入った直後の過去ログは出さない）
   function renderChat(pub) {
     const box = $("room-chat");
     const slot = $(pub.status === "lobby" ? "lobby-chat-slot" : "game-chat-slot");
@@ -1184,7 +1188,55 @@ window.GAME_START = () => {
     });
     $("chat-empty").hidden = ol.children.length > 0;
     if (atBottom || !ol.dataset.init) { ol.scrollTop = ol.scrollHeight; ol.dataset.init = "1"; }
+    const lastTs = chat.length ? chat[chat.length - 1].ts : 0;
+    if (chatSeenTs != null) chat.filter((m) => m.ts > chatSeenTs && m.p !== vs.me && !SOCIAL.isBlocked(m.code)).forEach(popChat);
+    chatSeenTs = Math.max(chatSeenTs || 0, lastTs);
   }
+  function popChat(m) {
+    const area = $("pop-area");
+    const card = el("div", "pop-chat");
+    const nm = el("b", null, m.name); nm.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
+    card.append("💬 ", nm, el("span", null, m.text));
+    card.addEventListener("click", () => { card.remove(); $("room-chat").scrollIntoView({ behavior: "smooth", block: "center" }); $("chat-input").focus(); });
+    area.appendChild(card);
+    while (area.children.length > 3) area.firstChild.remove();
+    setTimeout(() => { card.classList.add("out"); setTimeout(() => card.remove(), 400); }, 4000);
+  }
+
+  // ---- スタンプ（チャットとは別。ログには残さず、その場で大きく表示する）
+  const STAMPS = CFG.stamps || ["www", "OH！", "？？？", "わかった！"];
+  function hostStamp(pIdx, k) {
+    const H = vs.host; const p = H && H.players[pIdx]; if (!p) return;
+    k = k | 0; if (!(k >= 0 && k < STAMPS.length)) return;
+    const now = Date.now(); if (now - (p.stampAt || 0) < 1200) return;   // 連打の制限
+    p.stampAt = now;
+    const msg = { t: "stamp", p: pIdx, name: p.name, code: p.code || "", k };
+    H.players.forEach((x) => { if (x.conn && x.connected) hostSend(x.conn, msg); });
+    showStamp(msg);
+  }
+  function showStamp(m) {
+    if (SOCIAL.isBlocked(m.code) || !STAMPS[m.k]) return;
+    const area = $("stamp-area");
+    const st = el("div", "stamp-pop");
+    st.style.setProperty("--c", PLAYER_COLORS[m.p % PLAYER_COLORS.length]);
+    st.style.left = 12 + Math.random() * 56 + "%";
+    st.appendChild(el("div", "stamp-text", STAMPS[m.k]));
+    st.appendChild(el("div", "stamp-by", m.p === vs.me ? "あなた" : m.name));
+    area.appendChild(st);
+    while (area.children.length > 6) area.firstChild.remove();
+    setTimeout(() => st.remove(), 2200);
+  }
+  function sendStamp(k) {
+    if (!vs.pub) return;
+    const now = Date.now(); if (now - (vs.stampAt || 0) < 1200) return;
+    vs.stampAt = now;
+    send({ t: "stamp", k }, () => hostStamp(vs.me, k));
+  }
+  STAMPS.forEach((t, k) => {
+    const b = el("button", "stamp-btn", t); b.type = "button";
+    b.addEventListener("click", () => sendStamp(k));
+    $("stamp-bar").appendChild(b);
+  });
   function sendChat() {
     const input = $("chat-input");
     const text = input.value.replace(/\s+/g, " ").trim().slice(0, 100);
