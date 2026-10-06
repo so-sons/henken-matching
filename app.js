@@ -58,8 +58,6 @@ window.GAME_START = () => {
     const h1 = $("hero-title"); h1.innerHTML = "";
     String(CFG.heroTitle || CFG.title).split("\n").forEach((line, i) => { if (i) h1.appendChild(el("br")); h1.appendChild(document.createTextNode(line)); });
     $("hero-example").textContent = CFG.heroExample || "〇〇";
-    $("rule-free-example").textContent = CFG.freeExample || "";
-    $("rule-hint-example").textContent = CFG.hintExample || "";
     $("bias-input").placeholder = "例：" + (CFG.biasExample || "");
     $("free-input").placeholder = "例：" + (CFG.freeExample || "");
     $("guess-input").placeholder = "お題は誰（何）？";

@@ -21,6 +21,7 @@
   </button>
   <div class="topbar-right">
     <span id="topbar-status"></span>
+    <button class="help-btn" type="button" data-open-tutorial aria-label="遊び方">？</button>
     <button class="friends-btn" id="btn-friends" type="button" aria-label="フレンド">👥<span class="friends-label">フレンド</span><span class="friends-online" id="friends-online-dot" hidden></span><span class="friends-badge" id="friends-badge" hidden></span></button>
   </div>
 </header>
@@ -40,7 +41,12 @@
       <div class="hero-demo" aria-hidden="true">
         <span class="bias-bubble">「<b id="hero-example"></b>」そうですか？</span>
       </div>
-      <p class="lead">出題者がこっそりお題（キャラ・有名人・身近な人など何でもOK）を1つ決めます。回答者は<b>「〇〇そうですか？」</b>と<b>偏見</b>をぶつけて絞り込み、正体を当てたら勝ち！</p>
+      <ol class="lead-steps">
+        <li><b>①</b> 出題者がお題をこっそり決める</li>
+        <li><b>②</b> 回答者は<b>「〇〇そうですか？」</b>と偏見をぶつけて絞り込む</li>
+        <li><b>③</b> 正体を当てたら勝ち！</li>
+      </ol>
+      <button class="btn tut-open" type="button" data-open-tutorial>📖 遊び方を見る</button>
     </div>
 
     <div class="card resume-card" id="resume-card" hidden>
@@ -55,7 +61,7 @@
       <button class="mode-card accent" id="btn-versus" type="button">
         <span class="mode-icon">🗯️</span>
         <span class="mode-title">対戦する</span>
-        <span class="mode-desc">ルームコードで友達と対戦（2〜4人）、またはランダム対戦で知らない人と1対1。出題者を決めて、ほかの人が回答者になります。</span>
+        <span class="mode-desc">ルームコードで友達と対戦（1対1／最大8人）、またはランダム対戦で知らない人とマッチ。出題者を決めて、ほかの人が回答者になります。</span>
       </button>
     </div>
 
@@ -63,21 +69,6 @@
       <button class="btn small" id="btn-copy-app-link" type="button">🔗 友達に共有するリンクをコピー</button>
     </div>
 
-    <details class="panel" open>
-      <summary>遊び方</summary>
-      <div class="panel-body rules">
-        <table class="rules-table"><tbody>
-          <tr><th>偏見</th><td><b>「　」そうですか？</b> の空欄を埋めて質問。出題者は「めっちゃそう／ちょっとそう／どっちとも／あんまり／ぜんぜん」で答えます。回数はルームで設定（無制限もOK）。</td></tr>
-          <tr><th>自由質問</th><td>偏見に関係なく何でも聞ける質問（例：<span id="rule-free-example"></span>）。出題者は「はい／部分的にはい／わからない／部分的にいいえ／いいえ」で答えます。<b>2〜5回</b>まで（ルームで設定）。</td></tr>
-          <tr><th>お題</th><td>出題者が自由に入力します。ジャンル（例：<span id="rule-hint-example"></span>）を書いておくと回答者に表示されます。</td></tr>
-          <tr><th>1対1／複数人</th><td>ルームを作るときに選べます。複数人は出題者1人 vs 回答者 最大7人で、順番に1手ずつ。最初に当てた人の勝ち。回数は「1人ずつ」（回答を使い切った人はその試合から抜ける）か「全員合計」をルームで選べます。ランダム対戦も1対1／複数人（3〜5人）を選べます。</td></tr>
-          <tr><th>回答</th><td>お題が何かを答えます。出題者が「正解／惜しい／不正解」で判定（お題と同じ文字なら自動で正解）。当たれば回答者の勝ち、回答できる回数を使い切ったら出題者の勝ち。</td></tr>
-          <tr><th>フレンド</th><td>右上の「👥 フレンド」からフレンドコードで追加、個人チャット、ルームへの招待ができます。ルームの参加者一覧からも申請・ブロックできます。チャットは相手もサイトを開いているときだけ届き、フレンド一覧と会話はこの端末にだけ保存されます。</td></tr>
-        </tbody></table>
-        <p class="note">回答者が複数いるときは順番に1手ずつ（偏見・自由質問・回答のどれか1つ）。複数人のときの回数は、ルームの設定で「1人ずつ」か「全員合計」です。各手番には制限時間があります。出題者が時間切れのときは「どっちとも／わからない」扱い。回答者が時間切れのときは偏見を1回消費し（無制限ならパス）、3回連続で時間切れになると降参扱いです。</p>
-        <p class="note">偏見の入力欄には候補が3つ出ます（一度選んだ候補はこの端末では出ません）。通信が切れたときは画面上の「対戦に戻る」で復帰できます。対戦中に「ホームへ」で抜けても同じように戻れます（完全に抜けるときはルーム画面の「退出」）。ページを閉じてしまっても、3時間以内ならホーム画面の「前の対戦に戻る」から戻れます。切れていない側は「相手を待つ」を選ぶと、戻ってくるまでタイマーが止まります。</p>
-      </div>
-    </details>
   </section>
 
   <!-- ===== 対戦ロビー ===== -->
@@ -269,6 +260,104 @@
   </section>
 </main>
 
+<!-- ===== 遊び方（チュートリアル） ===== -->
+<div class="modal-backdrop" id="tutorial-modal" hidden>
+  <div class="modal tut-modal" role="dialog" aria-modal="true" aria-labelledby="tut-title">
+    <div class="tut-head">
+      <h2 id="tut-title">📖 遊び方</h2>
+      <button class="btn small" id="tut-skip" type="button">スキップ</button>
+    </div>
+    <div class="tut-slides" id="tut-slides">
+
+      <section class="tut-slide">
+        <div class="tut-step">1 / 6</div>
+        <h3>出題者がお題をこっそり決める</h3>
+        <div class="tut-mock">
+          <div class="topic-chosen"><span class="topic-badge">お題</span><b>ドラえもん</b></div>
+          <div class="tut-row"><span class="genre">ジャンル：アニメキャラ</span><span class="tut-note">回答者にも見える</span></div>
+          <div class="tut-row"><span class="tut-chip">🖼️ 画像も付けられる</span><span class="tut-note">正解発表で表示</span></div>
+        </div>
+        <p>キャラ・有名人・身近な人など、お題は<b>何でもOK</b>。回答者には見えません。</p>
+      </section>
+
+      <section class="tut-slide">
+        <div class="tut-step">2 / 6</div>
+        <h3>回答者は「偏見」をぶつける</h3>
+        <div class="tut-mock">
+          <div class="tut-row"><span class="tut-chip idea">運動神経がよさそう</span><span class="tut-chip idea">朝に弱そう</span><span class="tut-note">候補が3つ出る</span></div>
+          <div class="tut-q">「<b>彼女がコロコロ変わって</b>」そうですか？</div>
+          <div class="tut-answers">
+            <span class="qa-a yes">めっちゃそう</span><span class="qa-a pyes">ちょっとそう</span><span class="qa-a unknown">どっちとも</span><span class="qa-a pno">あんまり</span><span class="qa-a no">ぜんぜん</span>
+          </div>
+        </div>
+        <p>「　」の中を埋めるだけ。出題者は<b>自分のイメージで</b>5段階で答えます。</p>
+      </section>
+
+      <section class="tut-slide">
+        <div class="tut-step">3 / 6</div>
+        <h3>ここぞというときは「自由質問」</h3>
+        <div class="tut-mock">
+          <div class="tut-q">❓ 中学生ですか？</div>
+          <div class="tut-answers">
+            <span class="qa-a yes">はい</span><span class="qa-a pyes">部分的にはい</span><span class="qa-a unknown">わからない</span><span class="qa-a pno">部分的にいいえ</span><span class="qa-a no">いいえ</span>
+          </div>
+        </div>
+        <p>偏見に関係なく何でも聞けます。ただし<b>2〜5回まで</b>（ルームで決めます）。</p>
+      </section>
+
+      <section class="tut-slide">
+        <div class="tut-step">4 / 6</div>
+        <h3>わかったら「回答」！</h3>
+        <div class="tut-mock">
+          <div class="tut-q">🎯 ドラえもん</div>
+          <div class="tut-answers"><span class="qa-a yes">正解！</span><span class="qa-a pyes">惜しい！</span><span class="qa-a no">不正解</span></div>
+        </div>
+        <p><b>当てたら回答者の勝ち</b>。回答の回数を使い切ったら<b>出題者の勝ち</b>。<br>回答者は1手ごとに「偏見・自由質問・回答」のどれか1つを選びます。</p>
+      </section>
+
+      <section class="tut-slide">
+        <div class="tut-step">5 / 6</div>
+        <h3>遊び方を選べる</h3>
+        <div class="tut-mock tut-list">
+          <div><b>👥 1対1</b><span>出題者と回答者の2人</span></div>
+          <div><b>🎉 複数人</b><span>出題者1人 vs 回答者 最大7人。最初に当てた人の勝ち</span></div>
+          <div><b>🎲 ランダム対戦</b><span>コード不要で知らない人とマッチ（1対1／複数人）</span></div>
+        </div>
+        <p>友達とは「ルームを作成」して、コードや招待リンクを送るだけ。</p>
+      </section>
+
+      <section class="tut-slide">
+        <div class="tut-step">6 / 6</div>
+        <h3>便利な機能</h3>
+        <div class="tut-mock tut-list">
+          <div><b>😆 スタンプ・チャット</b><span>「www」「天才」などで盛り上がろう</span></div>
+          <div><b>🤝 フレンド</b><span>右上の「👥」からフレンド追加・個人チャット・招待</span></div>
+          <div><b>🔌 通信が切れても大丈夫</b><span>「対戦に戻る」で復帰。相手が戻るまでタイマーは止まる</span></div>
+        </div>
+        <details class="tut-details">
+          <summary>くわしいルール</summary>
+          <ul class="tut-rules">
+            <li>偏見の回数はルームで設定（無制限もOK）。自由質問は2〜5回、回答は1〜5回。</li>
+            <li>回答はお題と同じ文字なら自動で正解。それ以外は出題者が「正解／惜しい／不正解」で判定します。</li>
+            <li>複数人のときの回数は「1人ずつ」（回答を使い切った人は抜ける）か「全員合計」をルームで選べます。</li>
+            <li>各手番には制限時間があります。出題者が時間切れなら「どっちとも／わからない」扱い。回答者が時間切れなら偏見を1回消費（無制限ならパス）し、3回連続で降参扱い。</li>
+            <li>偏見の候補は、一度選んだものはこの端末ではもう出ません。</li>
+            <li>対戦中に「ホームへ」で抜けても、ホームの「前の対戦に戻る」から戻れます（3時間以内）。完全に抜けるときはルーム画面の「退出」。</li>
+            <li>お題の画像は正解発表のときだけ参加者に表示され、サーバーには保存されません。ランダム対戦ではぼかして表示されます。</li>
+            <li>フレンド一覧と会話はこの端末にだけ保存されます。チャットは相手もサイトを開いているときだけ届きます。</li>
+          </ul>
+        </details>
+      </section>
+
+    </div>
+    <div class="tut-dots" id="tut-dots"></div>
+    <div class="tut-nav">
+      <button class="btn" id="tut-prev" type="button">← 戻る</button>
+      <button class="btn primary" id="tut-next" type="button">次へ →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== ルームチャット（ロビー／ゲーム画面に移動して使う） ===== -->
 <div class="room-chat" id="room-chat" hidden>
   <div class="field-label">💬 ルームチャット</div>
@@ -362,7 +451,7 @@
 <footer class="foot" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
-<script>["config.js","bias-ideas.js","social.js","app.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>["config.js","bias-ideas.js","social.js","app.js","tutorial.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
 <script>window.GAME_START();</script>
 </body>
 </html>
