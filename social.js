@@ -126,7 +126,7 @@ window.SOCIAL_START = (app) => {
     const st = { conn, outgoing: !!expected, nonce: b64(crypto.getRandomValues(new Uint8Array(16))), code: null, pub: null, name: "", authed: false, q: Promise.resolve(), recent: [] };
     const timer = setTimeout(() => { if (!st.authed) { try { conn.close(); } catch {} if (expected) dialDone(expected, null); } }, 12000);
     st.timer = timer;
-    conn.on("open", () => { conn.send({ t: "hi", v: 1, code: me.code, name: app.getName(), pub: me.pub, nonce: st.nonce }); });
+    conn.on("open", () => { conn.send({ t: "hi", v: 1, code: me.code, name: app.getName(), pub: me.pub, nonce: st.nonce, profile: window.PROFILE ? PROFILE.get() : null }); });
     // 受信は順番に処理する（署名の確認が非同期なので、順番が入れ替わらないように）
     conn.on("data", (m) => { st.q = st.q.then(() => onData(st, m, expected)).catch((e) => console.warn(e)); });
     conn.on("close", () => {
@@ -146,7 +146,7 @@ window.SOCIAL_START = (app) => {
       const code = String(m.code || ""), pub = String(m.pub || "");
       const bad = !/^[A-Z2-9]{10}$/.test(code) || (expected && code !== expected) || code === me.code || isBlocked(code);
       if (bad || (await codeOf(unb64(pub)).catch(() => "")) !== code) { st.conn.close(); return; }
-      st.code = code; st.pub = pub; st.name = cleanName(m.name);
+      st.code = code; st.pub = pub; st.name = cleanName(m.name); st.profile = window.PROFILE ? PROFILE.clean(m.profile) : null;
       st.conn.send({ t: "proof", sig: await sign(authBytes(String(m.nonce || ""))) });
       return;
     }
@@ -161,7 +161,7 @@ window.SOCIAL_START = (app) => {
       }
       sessions.set(st.code, st);
       const f = friends.find((x) => x.code === st.code);
-      if (f && f.name !== st.name) { f.name = st.name; save(); }
+      if (f && (f.name !== st.name || JSON.stringify(f.profile || null) !== JSON.stringify(st.profile || null))) { f.name = st.name; f.profile = st.profile; save(); }
       if (f) st.conn.send({ t: "fsync" });   // フレンド関係の食い違い（オフライン中の承認・解除）を直す
       dialDone(st.code, st);
       render();
@@ -217,10 +217,11 @@ window.SOCIAL_START = (app) => {
       case "msgoff":
         toast(`${st.name} はチャットを受け取らない設定です`);
         return;
-      case "hi-name": {   // 相手がニックネームを変えた
+      case "hi-name": {   // 相手がニックネームやプロフィールを変えた
         st.name = cleanName(m.name);
+        if (m.profile && window.PROFILE) st.profile = PROFILE.clean(m.profile);
         const f = friends.find((x) => x.code === code);
-        if (f && f.name !== st.name) { f.name = st.name; save(); render(); }
+        if (f) { f.name = st.name; if (st.profile) f.profile = st.profile; save(); render(); }
         return;
       }
     }
@@ -230,7 +231,7 @@ window.SOCIAL_START = (app) => {
   function addFriend(code, name) {
     outgoing = outgoing.filter((c) => c !== code);
     requests = requests.filter((r) => r.code !== code);
-    if (!isFriend(code)) friends.push({ code, name: cleanName(name) });
+    if (!isFriend(code)) { const s = sessions.get(code); friends.push({ code, name: cleanName(name), profile: s && s.profile ? s.profile : null }); }
     save(); render();
   }
   function removeFriend(code, fromRemote) {
@@ -371,7 +372,11 @@ window.SOCIAL_START = (app) => {
       const on = isOnline(f.code);
       const li = el("li", "f-item" + (on ? " on" : ""));
       const dot = el("span", "f-dot" + (on ? " on" : "")); dot.title = on ? "オンライン" : "オフライン"; li.appendChild(dot);
-      const nm = el("span", "f-name", f.name); li.appendChild(nm);
+      const nm = el("button", "f-name f-who"); nm.type = "button";
+      if (window.PROFILE) nm.appendChild(PROFILE.avatar(f.profile, f.name, 26));
+      nm.appendChild(el("span", null, f.name));
+      if (window.PROFILE) nm.addEventListener("click", () => PROFILE.showCard({ name: f.name, profile: f.profile, sub: isOnline(f.code) ? "オンライン" : "オフライン" }));
+      li.appendChild(nm);
       if (unread[f.code]) li.appendChild(el("span", "f-unread", String(unread[f.code])));
       const act = el("span", "f-act");
       act.appendChild(smallBtn("💬 チャット", "", () => openChat(f.code)));
@@ -433,6 +438,10 @@ window.SOCIAL_START = (app) => {
     $("social-name").value = n;
     sessions.forEach((s) => { if (s.conn.open) s.conn.send({ t: "hi-name", name: n }); });
   });
+  if (window.PROFILE) {
+    PROFILE.onChange((p) => sessions.forEach((s) => { if (s.conn.open) s.conn.send({ t: "hi-name", name: app.getName(), profile: p }); }));
+    $("profile-edit").addEventListener("toggle", (e) => { if (e.target.open) PROFILE.openEditor(); });
+  }
   $("set-accept-requests").addEventListener("change", (e) => { settings.acceptRequests = e.target.checked; save(); });
   $("set-accept-chat").addEventListener("change", (e) => { settings.acceptChat = e.target.checked; save(); });
   $("dm-back").addEventListener("click", closeChat);

@@ -99,6 +99,8 @@
       <div class="card">
         <h3>ルームを作成</h3>
         <p class="muted">あなたがホストになります。回数などの設定はルームの中でも変えられます。</p>
+        <label class="genre-field"><span class="muted small-label">ジャンル（任意）</span>
+          <input id="room-genre" class="text" maxlength="20" placeholder="例：アニメ・漫画、ポケモン、身内ネタ" autocomplete="off" list="genre-history"></label>
         <div class="seg room-mode-seg" role="radiogroup">
           <label><input type="radio" name="roommode" value="duel" checked><span>1対1<small>出題者と回答者1人</small></span></label>
           <label><input type="radio" name="roommode" value="multi"><span>複数人<small>出題者1人 vs 回答者 最大7人</small></span></label>
@@ -121,6 +123,9 @@
         <label><input type="radio" name="matchmode" value="duel" checked><span>1対1<small>2人。出題者は最初ランダム、あとは交互</small></span></label>
         <label><input type="radio" name="matchmode" value="multi"><span>複数人<small>3〜5人。出題者はランダムで決まり、試合ごとに交代</small></span></label>
       </div>
+      <label class="genre-field"><span class="muted small-label">ジャンルを指定（任意・同じジャンルを入れた人とだけマッチ）</span>
+        <input id="match-genre" class="text" maxlength="20" placeholder="空欄なら何でもOKの人とマッチ" autocomplete="off" list="genre-history"></label>
+      <datalist id="genre-history"></datalist>
       <div class="row">
         <button class="btn primary" id="btn-match" type="button">相手を探す</button>
         <button class="btn" id="btn-match-cancel" type="button" hidden>やめる</button>
@@ -207,7 +212,7 @@
   <section id="screen-game" class="screen" hidden>
     <div class="game-head">
       <div>
-        <div class="game-mode">偏見マッチング</div>
+        <div class="game-mode" id="game-title">偏見マッチング</div>
         <div class="counters" id="counters"></div>
       </div>
       <div class="head-right">
@@ -409,6 +414,30 @@
         <div class="social-status" id="social-status"></div>
       </div>
 
+      <details class="fm-details profile-edit" id="profile-edit">
+        <summary>👤 プロフィールを編集</summary>
+        <div class="pe-row">
+          <div class="pe-avatar" id="pe-avatar"></div>
+          <div class="pe-icon-btns">
+            <label class="btn small" for="pe-icon-file">アイコンを選ぶ</label>
+            <input type="file" id="pe-icon-file" accept="image/*" hidden>
+            <button class="btn small" id="pe-icon-clear" type="button" hidden>外す</button>
+          </div>
+        </div>
+        <label class="pe-label">自己紹介 <span class="muted" id="pe-bio-count">0/100</span>
+          <textarea id="pe-bio" class="text" maxlength="100" rows="3" placeholder="例：アニメとゲームが好きです。偏見強めでいきます！"></textarea></label>
+        <div class="pe-label">よく参加しているジャンル（3つまで）</div>
+        <div class="pe-genres">
+          <input id="pe-genre-0" class="text" maxlength="20" list="pe-genre-list" autocomplete="off" placeholder="ジャンル1">
+          <input id="pe-genre-1" class="text" maxlength="20" list="pe-genre-list" autocomplete="off" placeholder="ジャンル2">
+          <input id="pe-genre-2" class="text" maxlength="20" list="pe-genre-list" autocomplete="off" placeholder="ジャンル3">
+        </div>
+        <datalist id="pe-genre-list"></datalist>
+        <p class="muted fm-note"><span id="pe-genre-hint"></span> <button class="link-btn" id="pe-fill-history" type="button">よく遊んでいるジャンルを入れる</button></p>
+        <div class="row"><button class="btn primary small" id="pe-save" type="button">保存</button><span class="muted" id="pe-saved" hidden>保存しました</span></div>
+        <p class="muted fm-note">プロフィールは、同じルームの参加者とフレンドに表示されます（サーバーには保存しません）。</p>
+      </details>
+
       <div class="field">
         <div class="field-label">フレンドを追加</div>
         <div class="guess-input-wrap">
@@ -464,12 +493,20 @@
 
 <div class="pop-area" id="pop-area" aria-live="polite"></div>
 <div class="stamp-area" id="stamp-area" aria-hidden="true"></div>
+<!-- ===== プロフィールのカード ===== -->
+<div class="modal-backdrop" id="profile-modal" hidden>
+  <div class="modal profile-modal" role="dialog" aria-modal="true">
+    <div id="profile-card"></div>
+    <div class="row"><button class="btn" id="profile-close" type="button">閉じる</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <footer class="foot" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
-<script>["config.js","ngwords.js","bias-ideas.js","social.js","app.js","tutorial.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>["config.js","ngwords.js","bias-ideas.js","profile.js","social.js","app.js","tutorial.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
 <script>window.GAME_START();</script>
 </body>
 </html>
