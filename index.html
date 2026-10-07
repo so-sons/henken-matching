@@ -122,11 +122,9 @@
     </div>
 
     <div class="card room-list-card" id="room-list-card">
-      <div class="rl-head"><h3>ルーム一覧</h3><button class="btn small" id="room-refresh" type="button">🔄 更新</button></div>
-      <p class="muted">公開されているルームに、コードなしで参加できます。</p>
-      <input id="room-search" class="text" maxlength="20" placeholder="ジャンルで探す（例：アニメ）" autocomplete="off" list="genre-history">
-      <ul class="room-list" id="room-list"></ul>
-      <p class="muted rl-status" id="room-list-status"></p>
+      <h3>ルーム一覧</h3>
+      <p class="muted">今できているルームを見て、コードなしで参加できます。</p>
+      <button class="btn primary" id="btn-room-list" type="button">📋 ルーム一覧を見る</button>
     </div>
 
     <div class="card match-card" id="lobby-match">
@@ -523,6 +521,17 @@
 
 <div class="pop-area" id="pop-area" aria-live="polite"></div>
 <div class="stamp-area" id="stamp-area" aria-hidden="true"></div>
+<!-- ===== ルーム一覧 ===== -->
+<div class="modal-backdrop" id="rooms-modal" hidden>
+  <div class="modal rooms-modal" role="dialog" aria-modal="true" aria-labelledby="rooms-title">
+    <div class="rl-head"><h2 id="rooms-title">📋 ルーム一覧</h2><button class="btn small" id="room-refresh" type="button">🔄 更新</button></div>
+    <input id="room-search" class="text" maxlength="20" placeholder="ジャンルで絞り込む（空欄ならすべて表示）" autocomplete="off" list="genre-history">
+    <ul class="room-list" id="room-list"></ul>
+    <p class="muted rl-status" id="room-list-status"></p>
+    <div class="row"><button class="btn" id="rooms-close" type="button">閉じる</button></div>
+  </div>
+</div>
+
 <!-- ===== 試合を投稿 ===== -->
 <div class="modal-backdrop" id="compose-modal" hidden>
   <div class="modal compose-modal" role="dialog" aria-modal="true" aria-labelledby="cp-title">

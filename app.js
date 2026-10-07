@@ -81,7 +81,6 @@ window.GAME_START = () => {
   // --------------------------------------------------------------- screens
   function showScreen(name) {
     ["home", "lobby", "game", "feed"].forEach((s) => ($("screen-" + s).hidden = s !== name));
-    if (name === "lobby") roomListTick(true); else stopRoomList();
     window.scrollTo(0, 0);
   }
   // ホームへ：ルーム・対戦からは「一時的に抜ける」扱い（相手からは通信切れに見え、ホームの「前の対戦に戻る」で戻れる）
@@ -987,14 +986,20 @@ window.GAME_START = () => {
     if (cloudListedCode && window.CLOUD) CLOUD.removeRoom(cloudListedCode);
     cloudListedCode = null;
   }
-  window.addEventListener("cloud-ready", () => { cloudRoomSync(true); if (!$("screen-lobby").hidden) loadRoomList(); });
+  window.addEventListener("cloud-ready", () => { cloudRoomSync(true); if (!$("rooms-modal").hidden) loadRoomList(); });
+  // 「ルーム一覧を見る」：開いている間だけ15秒ごとに読み直す（ジャンルに関係なく全部表示。絞り込みは任意）
   let roomList = [], roomListTimer = null;
-  function stopRoomList() { clearInterval(roomListTimer); roomListTimer = null; }
-  function roomListTick(start) {
-    if (start && !roomListTimer) { loadRoomList(); roomListTimer = setInterval(() => { if (!$("lobby-choice").hidden && document.visibilityState === "visible") loadRoomList(); }, 15000); }
+  function openRoomList() {
+    $("rooms-modal").hidden = false;
+    $("room-search").value = "";
+    $("room-list").innerHTML = ""; $("room-list-status").textContent = "読み込み中…";
+    loadRoomList();
+    clearInterval(roomListTimer);
+    roomListTimer = setInterval(() => { if (!$("rooms-modal").hidden && document.visibilityState === "visible") loadRoomList(); }, 15000);
   }
+  function closeRoomList() { $("rooms-modal").hidden = true; clearInterval(roomListTimer); roomListTimer = null; }
   async function loadRoomList() {
-    if (!CFG.firebase || $("lobby-choice").hidden) return;
+    if (!CFG.firebase || $("rooms-modal").hidden) return;
     if (!window.CLOUD) { $("room-list-status").textContent = "ルーム一覧を読み込んでいます…"; return; }
     try { roomList = await CLOUD.listRooms(); renderRoomList(); }
     catch (e) { console.warn(e); $("room-list-status").textContent = "ルーム一覧を読み込めませんでした。"; }
@@ -1012,11 +1017,12 @@ window.GAME_START = () => {
       li.appendChild(info);
       const b = el("button", "btn small" + (open ? " primary" : ""), r.status !== "lobby" ? "対戦中" : full ? "満員" : "参加"); b.type = "button";
       b.disabled = !open;
-      b.addEventListener("click", () => { $("join-code").value = r.code; joinRoom(); });
+      b.addEventListener("click", () => { closeRoomList(); $("join-code").value = r.code; joinRoom(); });
       li.appendChild(b);
       ul.appendChild(li);
     });
-    $("room-list-status").textContent = rooms.length ? "" : (q ? "そのジャンルのルームはまだありません。自分で作ってみよう！" : "今は公開されているルームがありません。");
+    const open = rooms.filter((r) => r.status === "lobby" && r.n < r.cap).length;
+    $("room-list-status").textContent = rooms.length ? `${rooms.length}件（参加できるルーム ${open}件）` : (q ? "そのジャンルのルームはまだありません。自分で作ってみよう！" : "今は公開されているルームがありません。自分でルームを作ってみよう！");
   }
   // 「この試合を投稿」の下書き（名前を伏せる用の「回答者A」なども作っておく）
   function buildPostDraft(pub) {
@@ -1710,6 +1716,9 @@ window.GAME_START = () => {
   try { $("room-genre").value = localStorage.getItem(CFG.id + ".lastGenre") || ""; } catch {}
   try { $("room-listed").checked = localStorage.getItem(CFG.id + ".listed") !== "0"; } catch {}
   $("room-refresh").addEventListener("click", () => loadRoomList());
+  $("btn-room-list").addEventListener("click", openRoomList);
+  $("rooms-close").addEventListener("click", closeRoomList);
+  $("rooms-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeRoomList(); });
   $("room-search").addEventListener("input", renderRoomList);
   $("btn-feed").addEventListener("click", () => { showScreen("feed"); FEED.open(); });
   $("feed-back").addEventListener("click", () => showScreen("home"));

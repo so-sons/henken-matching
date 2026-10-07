@@ -639,3 +639,10 @@ select.text { appearance: auto; }
 .cp-summary { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 12px; margin-bottom: 8px; }
 .cp-lines { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-s); padding: 6px 8px; margin: 4px 0 8px; font-size: 13px; }
 .cp-line input { margin: 0 2px 0 0; }
+
+/* ルーム一覧（モーダル） */
+.rooms-modal { max-width: 520px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; }
+.rooms-modal h2 { margin: 0; font-size: 18px; }
+.rooms-modal .rl-head { margin-bottom: 10px; }
+.rooms-modal .room-list { flex: 1; max-height: none; min-height: 120px; overflow-y: auto; }
+#btn-room-list { width: 100%; margin-top: 4px; }
