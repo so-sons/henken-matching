@@ -592,3 +592,50 @@ select.text { appearance: auto; }
 .pc-genres { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .genre-chip { font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: #e8efff; border: 1px solid #c9d6f5; color: var(--navy); }
 .pc-actions { margin-bottom: 12px; }
+
+/* ルーム一覧 */
+.room-list-card { margin-top: 12px; }
+.rl-head { display: flex; align-items: center; justify-content: space-between; }
+.room-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.rl-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--bg-2); }
+.rl-item.closed { opacity: .6; }
+.rl-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rl-info .genre-chip { align-self: flex-start; }
+.rl-meta { font-size: 12px; color: var(--muted); font-weight: 700; }
+.rl-status { margin: 8px 0 0; font-size: 13px; }
+
+/* みんなの試合 */
+.mode-grid.one { gap: 10px; }
+.feed-head { display: flex; align-items: center; justify-content: space-between; }
+.feed-head h2 { margin: 6px 0; }
+.feed-tabs { display: flex; gap: 6px; margin: 4px 0 12px; }
+.feed-tab { font: inherit; font-weight: 900; padding: 6px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
+.feed-tab.active { background: var(--navy-2); border-color: var(--navy-2); color: #fff; }
+.feed-list { display: flex; flex-direction: column; gap: 12px; }
+.feed-status { text-align: center; margin: 14px 0; }
+#feed-more { display: block; margin: 0 auto 14px; }
+.post { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow-s); }
+.post-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.post-who { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.post-who .muted { font-size: 12px; }
+.post-topic { font-size: 16px; margin-bottom: 2px; }
+.post-topic b { font-size: 18px; }
+.post-verdict { font-weight: 900; color: var(--navy-2); margin-bottom: 6px; }
+.post-comment { margin: 4px 0 8px; font-size: 15px; white-space: pre-wrap; word-break: break-word; }
+.post-log { list-style: none; margin: 0; padding: 8px; background: var(--bg-2); border-radius: var(--radius-s); display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.post-log li.more { display: none; }
+.post-log.open li.more { display: flex; }
+.post-log li, .cp-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.pl-by { font-weight: 800; color: var(--muted); font-size: 12px; }
+.pl-q { font-weight: 700; flex: 1; min-width: 50%; word-break: break-word; }
+.pl-a { font-size: 11px; font-weight: 900; background: var(--panel-2); border-radius: 999px; padding: 1px 8px; }
+.post-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.like-btn { font: inherit; font-weight: 900; font-size: 14px; padding: 6px 14px; border-radius: 999px; border: 1px solid #f0aab5; background: #fff; color: var(--danger); cursor: pointer; }
+.like-btn.on { background: var(--danger); color: #fff; border-color: var(--danger); }
+.muted-link { color: var(--muted); }
+.post-btn { border-color: var(--navy-2); color: var(--navy-2); }
+.compose-modal { max-width: 520px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.compose-modal h2 { margin: 0 0 10px; font-size: 18px; }
+.cp-summary { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 12px; margin-bottom: 8px; }
+.cp-lines { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-s); padding: 6px 8px; margin: 4px 0 8px; font-size: 13px; }
+.cp-line input { margin: 0 2px 0 0; }

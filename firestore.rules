@@ -1,0 +1,104 @@
+rules_version = '2';
+// 偏見マッチングの Firestore セキュリティルール
+// Firebase コンソール → Firestore → 「ルール」タブに、この内容をそのまま貼って「公開」する。
+//  - rooms   : ルーム一覧（ホストが自分のルームだけを書き込む・誰でも読める）
+//  - posts   : サイト内SNSの投稿（本人だけが作成・削除。いいねの数は likes と一緒にしか増減できない）
+//  - users   : 投稿の間隔（1分に1回）を確かめるための記録
+//  - reports : 通報（書き込みだけ。中身は Firebase コンソールで確認する）
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function str(v, max) { return v is string && v.size() <= max; }
+
+    // ---------------------------------------------------------------- ルーム一覧
+    function validRoom(code) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['code', 'genre', 'gkey', 'mode', 'cap', 'n', 'status', 'host', 'ownerUid', 'updatedAt', 'expireAt'])
+        && d.ownerUid == request.auth.uid
+        && d.code == code && code.matches('^[0-9]{6}$')
+        && str(d.genre, 20) && str(d.gkey, 40) && str(d.host, 12)
+        && d.mode in ['duel', 'multi']
+        && d.status in ['lobby', 'playing', 'finished']
+        && d.n is int && d.n >= 0 && d.n <= 8
+        && d.cap is int && d.cap >= 2 && d.cap <= 8
+        && d.updatedAt == request.time
+        && d.expireAt is timestamp;
+    }
+    match /rooms/{code} {
+      allow read: if true;
+      allow create: if signedIn() && validRoom(code);
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid && validRoom(code);
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------- 投稿
+    function validPost() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'name', 'icon', 'genre', 'topic', 'hint', 'verdict', 'comment', 'log', 'likeCount', 'createdAt'])
+        && d.uid == request.auth.uid
+        && d.likeCount == 0
+        && d.createdAt == request.time
+        && str(d.name, 12) && d.name.size() >= 1
+        && str(d.icon, 20000)
+        && str(d.genre, 20) && str(d.hint, 30)
+        && str(d.topic, 40) && d.topic.size() >= 1
+        && str(d.verdict, 40)
+        && str(d.comment, 140)
+        && str(d.log, 4000);
+    }
+    // 投稿は1分に1回まで（同じ書き込みの中で users/{uid}.lastPostAt を今の時刻にする）
+    function postRateOk() {
+      let u = /databases/$(database)/documents/users/$(request.auth.uid);
+      return getAfter(u).data.lastPostAt == request.time
+        && (!exists(u) || get(u).data.lastPostAt < request.time - duration.value(60, 's'));
+    }
+    function likePath(postId) { return /databases/$(database)/documents/posts/$(postId)/likes/$(request.auth.uid); }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if signedIn() && validPost() && postRateOk();
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      // いいねの数：自分の likes を作るときだけ +1、消すときだけ -1
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+        && (
+          (request.resource.data.likeCount == resource.data.likeCount + 1
+            && !exists(likePath(postId)) && existsAfter(likePath(postId)))
+          ||
+          (request.resource.data.likeCount == resource.data.likeCount - 1
+            && exists(likePath(postId)) && !existsAfter(likePath(postId)))
+        );
+
+      match /likes/{uid} {
+        allow read: if true;
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time
+          && getAfter(/databases/$(database)/documents/posts/$(postId)).data.likeCount
+             == get(/databases/$(database)/documents/posts/$(postId)).data.likeCount + 1;
+        allow delete: if signedIn() && request.auth.uid == uid
+          && (!exists(/databases/$(database)/documents/posts/$(postId))
+              || getAfter(/databases/$(database)/documents/posts/$(postId)).data.likeCount
+                 == get(/databases/$(database)/documents/posts/$(postId)).data.likeCount - 1);
+      }
+    }
+
+    match /users/{uid} {
+      allow read: if false;
+      allow write: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastPostAt'])
+        && request.resource.data.lastPostAt == request.time;
+    }
+
+    // ---------------------------------------------------------------- 通報
+    match /reports/{id} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['postId', 'reason', 'uid', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && str(request.resource.data.postId, 40)
+        && str(request.resource.data.reason, 200)
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
+  }
+}

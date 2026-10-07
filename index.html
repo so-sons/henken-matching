@@ -79,6 +79,11 @@
         <span class="mode-title">対戦する</span>
         <span class="mode-desc">ルームコードで友達と対戦（1対1／最大8人）、またはランダム対戦で知らない人とマッチ。出題者を決めて、ほかの人が回答者になります。</span>
       </button>
+      <button class="mode-card" id="btn-feed" type="button">
+        <span class="mode-icon">📣</span>
+        <span class="mode-title">みんなの試合</span>
+        <span class="mode-desc">おもしろかった試合のハイライトを見たり、いいね！したりできます</span>
+      </button>
     </div>
 
     <div class="share-row">
@@ -105,6 +110,7 @@
           <label><input type="radio" name="roommode" value="duel" checked><span>1対1<small>出題者と回答者1人</small></span></label>
           <label><input type="radio" name="roommode" value="multi"><span>複数人<small>出題者1人 vs 回答者 最大7人</small></span></label>
         </div>
+        <label class="check-row"><input type="checkbox" id="room-listed" checked> ルーム一覧に表示する（誰でも参加できます）</label>
         <button class="btn primary" id="btn-create-room" type="button">ルームを作成</button>
       </div>
       <div class="card">
@@ -113,6 +119,14 @@
         <input id="join-code" class="text code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="off">
         <button class="btn" id="btn-join-room" type="button">参加する</button>
       </div>
+    </div>
+
+    <div class="card room-list-card" id="room-list-card">
+      <div class="rl-head"><h3>ルーム一覧</h3><button class="btn small" id="room-refresh" type="button">🔄 更新</button></div>
+      <p class="muted">公開されているルームに、コードなしで参加できます。</p>
+      <input id="room-search" class="text" maxlength="20" placeholder="ジャンルで探す（例：アニメ）" autocomplete="off" list="genre-history">
+      <ul class="room-list" id="room-list"></ul>
+      <p class="muted rl-status" id="room-list-status"></p>
     </div>
 
     <div class="card match-card" id="lobby-match">
@@ -274,11 +288,27 @@
     <div class="row game-controls">
       <button class="btn danger" id="btn-surrender" type="button">降参</button>
       <button class="btn" id="btn-copy-result" type="button" hidden>結果をコピー</button>
+      <button class="btn post-btn" id="btn-post" type="button" hidden>📣 この試合を投稿</button>
       <button class="btn primary" id="btn-again" type="button" hidden>次へ（出題者を交代）</button>
       <button class="btn" id="btn-again-same" type="button" hidden>同じ出題者でもう一度</button>
       <button class="btn" id="btn-back-home" type="button">ホームへ</button>
     </div>
     <div class="log" id="game-log"></div>
+  </section>
+  <!-- ===== みんなの試合（サイト内SNS） ===== -->
+  <section id="screen-feed" class="screen" hidden>
+    <div class="feed-head">
+      <h2>📣 みんなの試合</h2>
+      <button class="btn small" id="feed-reload" type="button">🔄</button>
+    </div>
+    <div class="feed-tabs">
+      <button class="feed-tab active" type="button" data-sort="new">新着</button>
+      <button class="feed-tab" type="button" data-sort="popular">人気</button>
+    </div>
+    <div class="feed-list" id="feed-list"></div>
+    <p class="muted feed-status" id="feed-status"></p>
+    <button class="btn" id="feed-more" type="button" hidden>もっと見る</button>
+    <div class="row"><button class="btn" id="feed-back" type="button">← ホームへ</button></div>
   </section>
 </main>
 
@@ -493,6 +523,28 @@
 
 <div class="pop-area" id="pop-area" aria-live="polite"></div>
 <div class="stamp-area" id="stamp-area" aria-hidden="true"></div>
+<!-- ===== 試合を投稿 ===== -->
+<div class="modal-backdrop" id="compose-modal" hidden>
+  <div class="modal compose-modal" role="dialog" aria-modal="true" aria-labelledby="cp-title">
+    <h2 id="cp-title">📣 この試合を投稿</h2>
+    <div class="cp-summary">
+      <div><span class="muted">お題 </span><b id="cp-topic"></b></div>
+      <div class="post-verdict" id="cp-verdict"></div>
+      <div class="muted" id="cp-genre"></div>
+    </div>
+    <label class="check-row"><input type="checkbox" id="cp-hide" checked> ほかの参加者の名前を伏せる（「回答者A」などにする）</label>
+    <div class="field-label">載せるやり取り（チェックを外すと載りません）</div>
+    <div class="cp-lines" id="cp-lines"></div>
+    <label class="pe-label">ひとこと <span class="muted" id="cp-count">0/140</span>
+      <textarea id="cp-comment" class="text" maxlength="140" rows="2" placeholder="例：最後の偏見で一気にわかった！"></textarea></label>
+    <p class="muted fm-note">投稿は誰でも見られます。個人情報は書かないでください。自分の投稿はあとから削除できます。</p>
+    <div class="row">
+      <button class="btn primary" id="cp-post" type="button">投稿する</button>
+      <button class="btn" id="cp-cancel" type="button">やめる</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== プロフィールのカード ===== -->
 <div class="modal-backdrop" id="profile-modal" hidden>
   <div class="modal profile-modal" role="dialog" aria-modal="true">
@@ -506,7 +558,8 @@
 <footer class="foot" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
-<script>["config.js","ngwords.js","bias-ideas.js","profile.js","social.js","app.js","tutorial.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });</script>
+<script>["config.js","ngwords.js","bias-ideas.js","profile.js","social.js","feed.js","app.js","tutorial.js"].forEach(function (f) { document.write('<script src="' + f + window.__v + '"><\/script>'); });
+document.write('<script type="module" src="cloud.js' + window.__v + '"><\/script>');</script>
 <script>window.GAME_START();</script>
 </body>
 </html>

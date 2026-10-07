@@ -80,7 +80,8 @@ window.GAME_START = () => {
   }
   // --------------------------------------------------------------- screens
   function showScreen(name) {
-    ["home", "lobby", "game"].forEach((s) => ($("screen-" + s).hidden = s !== name));
+    ["home", "lobby", "game", "feed"].forEach((s) => ($("screen-" + s).hidden = s !== name));
+    if (name === "lobby") roomListTick(true); else stopRoomList();
     window.scrollTo(0, 0);
   }
   // ホームへ：ルーム・対戦からは「一時的に抜ける」扱い（相手からは通信切れに見え、ホームの「前の対戦に戻る」で戻れる）
@@ -160,7 +161,9 @@ window.GAME_START = () => {
     $("btn-create-room").disabled = true;
     const genre = cleanGenre($("room-genre").value);
     try { localStorage.setItem(CFG.id + ".lastGenre", genre); } catch {}
-    tryHostCode(0, name, { mode: selectedRadio("roommode", "duel"), genre });
+    const listed = $("room-listed").checked;
+    try { localStorage.setItem(CFG.id + ".listed", listed ? "1" : "0"); } catch {}
+    tryHostCode(0, name, { mode: selectedRadio("roommode", "duel"), genre, listed });
   }
   const selectedRadio = (name, def) => { const r = document.querySelector(`input[name="${name}"]:checked`); return r ? r.value : def; };
   // ov: ランダム対戦用のフック { onOpen(H), onReady(code), onFail(e) }
@@ -177,6 +180,7 @@ window.GAME_START = () => {
         mode: ov.mode === "multi" ? "multi" : "duel",   // duel=1対1 / multi=複数人（ルーム作成時に決める）
         randomMulti: !!ov.randomMulti,                  // ランダム対戦（複数人）のルーム：自動で出題者決定・開始・次の試合
         genre: cleanGenre(ov.genre),                    // ルームのジャンル（自由入力。空ならなんでも）
+        listed: !!(ov.listed || ov.randomMulti),        // ルーム一覧（Firebase）に出すか
         profVer: 0,                                     // プロフィールが変わるたびに増やす（参加者に配り直す）
         players: [Object.assign(newPlayer(name, null, SOCIAL.myCode()), { profile: PROFILE.get() })],
         chat: [],           // ルームチャット [{p, name, code, text, ts}]
@@ -720,6 +724,7 @@ window.GAME_START = () => {
     applyState(pub);
     renderAnswerImg();
     saveHostSnap();
+    cloudRoomSync(false);
   }
 
   // ---- ランダム対戦（サーバーなしの待ち合わせ）
@@ -962,6 +967,78 @@ window.GAME_START = () => {
     matchHold = null;
   }
 
+  // ---- ルーム一覧（Firebase）。ホスト：一覧に載せる／30秒ごとに「まだある」と書き直す。参加者：一覧を見て参加
+  let cloudKey = "", cloudBeat = null, cloudListedCode = null;
+  function cloudRoomSync(force) {
+    const H = vs.host;
+    if (!H || !H.listed || !window.CLOUD || !vs.code) return;
+    const data = {
+      code: vs.code, genre: H.genre || "", gkey: textNorm(H.genre || "").slice(0, 40), mode: H.mode, cap: roomCap(H),
+      n: H.players.filter((p) => p.connected).length, status: H.status, host: ng(H.players[0].name).slice(0, 12),
+    };
+    const key = JSON.stringify(data);
+    if (!force && key === cloudKey) return;
+    cloudKey = key; cloudListedCode = vs.code;
+    CLOUD.putRoom(data).catch((e) => console.warn("ルーム一覧に載せられませんでした", e));
+    if (!cloudBeat) cloudBeat = setInterval(() => cloudRoomSync(true), 30000);
+  }
+  function cloudRoomStop() {
+    clearInterval(cloudBeat); cloudBeat = null; cloudKey = "";
+    if (cloudListedCode && window.CLOUD) CLOUD.removeRoom(cloudListedCode);
+    cloudListedCode = null;
+  }
+  window.addEventListener("cloud-ready", () => { cloudRoomSync(true); if (!$("screen-lobby").hidden) loadRoomList(); });
+  let roomList = [], roomListTimer = null;
+  function stopRoomList() { clearInterval(roomListTimer); roomListTimer = null; }
+  function roomListTick(start) {
+    if (start && !roomListTimer) { loadRoomList(); roomListTimer = setInterval(() => { if (!$("lobby-choice").hidden && document.visibilityState === "visible") loadRoomList(); }, 15000); }
+  }
+  async function loadRoomList() {
+    if (!CFG.firebase || $("lobby-choice").hidden) return;
+    if (!window.CLOUD) { $("room-list-status").textContent = "ルーム一覧を読み込んでいます…"; return; }
+    try { roomList = await CLOUD.listRooms(); renderRoomList(); }
+    catch (e) { console.warn(e); $("room-list-status").textContent = "ルーム一覧を読み込めませんでした。"; }
+  }
+  function renderRoomList() {
+    const q = textNorm($("room-search").value);
+    const ul = $("room-list"); ul.innerHTML = "";
+    const rooms = roomList.filter((r) => !q || (r.gkey || "").includes(q)).sort((a, b) => (a.status === "lobby" ? 0 : 1) - (b.status === "lobby" ? 0 : 1));
+    rooms.forEach((r) => {
+      const full = r.n >= r.cap, open = r.status === "lobby" && !full;
+      const li = el("li", "rl-item" + (open ? "" : " closed"));
+      const info = el("div", "rl-info");
+      info.appendChild(el("span", "genre-chip", r.genre ? ng(r.genre) : "ジャンルなし"));
+      info.appendChild(el("span", "rl-meta", `${r.mode === "multi" ? "複数人" : "1対1"}・${r.n}/${r.cap}人・ホスト ${ng(r.host)}`));
+      li.appendChild(info);
+      const b = el("button", "btn small" + (open ? " primary" : ""), r.status !== "lobby" ? "対戦中" : full ? "満員" : "参加"); b.type = "button";
+      b.disabled = !open;
+      b.addEventListener("click", () => { $("join-code").value = r.code; joinRoom(); });
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+    $("room-list-status").textContent = rooms.length ? "" : (q ? "そのジャンルのルームはまだありません。自分で作ってみよう！" : "今は公開されているルームがありません。");
+  }
+  // 「この試合を投稿」の下書き（名前を伏せる用の「回答者A」なども作っておく）
+  function buildPostDraft(pub) {
+    const roles = {}; let n = 0;
+    pub.players.forEach((p, i) => { roles[i] = i === pub.setter ? "出題者" : "回答者" + "ABCDEFG"[n++]; });
+    const nm = (i) => (pub.players[i] ? ng(pub.players[i].name) : "?");
+    const lines = pub.log.map((x) => {
+      const base = { k: x.k, name: nm(x.p), role: roles[x.p] || "?" };
+      if (x.k === "t") return { ...base, q: "時間切れ", a: x.out ? "降参扱い" : "" };
+      if (x.k === "g") return { ...base, q: ng(x.q), a: (JUDGES.find((y) => y.k === x.r) || {}).label || "" };
+      return { ...base, q: ng(x.k === "b" ? biasText(x.q) : x.q), a: answerLabel(x.k, x.a) };
+    });
+    const steps = pub.log.filter((x) => x.k !== "t").length;
+    const w = pub.winner;
+    const v = (who) => (pub.reason === "correct" ? `${who} が正解！` : pub.reason === "no_guesses" ? "出題者の逃げ切り！" : pub.reason === "setter_left" ? "出題者が退出して終了" : "全員降参で出題者の勝ち");
+    return {
+      topic: ng(pub.answer), hint: ng(pub.hint || ""), genre: pub.genre || "",
+      verdict: `${v(nm(w))}（${steps}手）`, verdictHidden: `${v(roles[w])}（${steps}手）`,
+      lines, myName: vs.name || "プレイヤー", icon: PROFILE.get().icon,
+    };
+  }
+
   // ---- guest
   // ホストにつなぐ（参加・復帰で共通）。opts: { first: 最初に送るメッセージ, onOpen(), onFail(msg) }
   function connectHost(code, opts) {
@@ -1100,6 +1177,7 @@ window.GAME_START = () => {
     if (vs.host) clearTimeout(vs.host.autoTimer);
     if (match.active) matchReset();
     clearTimeout(rejoinTimer);
+    cloudRoomStop();
     const oldPeer = vs.peer, oldConn = vs.conn;
     if (keep && vs.isHost) saveHostSnap();   // 抜けた瞬間の状態（タイマーの残り）を保存
     if (!keep || !vs.code) {
@@ -1495,12 +1573,13 @@ window.GAME_START = () => {
     shareText = [`${CFG.title}`, verdict, pub.answer ? `お題：${pub.answer}` : "",
       ...pub.log.map((x) => (x.k === "t" ? `⏰ 時間切れ${x.used ? "（偏見 −1）" : ""}${x.out ? "→ 降参扱い" : ""}` : x.k === "b" ? `🗯️ ${biasText(x.q)} → ${answerLabel("b", x.a) || "-"}` : x.k === "f" ? `❓ ${x.q} → ${answerLabel("f", x.a) || "-"}` : `🎯 ${x.q} → ${(JUDGES.find((y) => y.k === x.r) || {}).label || "-"}`))].filter(Boolean).join("\n");
     $("btn-copy-result").hidden = false;
+    $("btn-post").hidden = !(CFG.firebase && pub.answer && pub.log.length);
     $("btn-again").hidden = !vs.isHost || pub.randomMulti; $("btn-again-same").hidden = !vs.isHost || pub.randomMulti;
   }
   function clearEndUI() {
     $("answer-card").hidden = true; $("answer-card").innerHTML = "";
     vs.answerImg = null;
-    ["btn-copy-result", "btn-again", "btn-again-same"].forEach((id) => ($(id).hidden = true));
+    ["btn-copy-result", "btn-post", "btn-again", "btn-again-same"].forEach((id) => ($(id).hidden = true));
   }
 
   function tick() {
@@ -1629,6 +1708,14 @@ window.GAME_START = () => {
   }
   fillGenreHistory();
   try { $("room-genre").value = localStorage.getItem(CFG.id + ".lastGenre") || ""; } catch {}
+  try { $("room-listed").checked = localStorage.getItem(CFG.id + ".listed") !== "0"; } catch {}
+  $("room-refresh").addEventListener("click", () => loadRoomList());
+  $("room-search").addEventListener("input", renderRoomList);
+  $("btn-feed").addEventListener("click", () => { showScreen("feed"); FEED.open(); });
+  $("feed-back").addEventListener("click", () => showScreen("home"));
+  $("btn-post").addEventListener("click", () => { if (vs.pub) FEED.compose(buildPostDraft(vs.pub)); });
+  FEED.init({ toast });
+  if (!CFG.firebase) { $("room-list-card").hidden = true; $("btn-feed").hidden = true; }
   $("btn-resume-discard").addEventListener("click", () => { clearResume(); renderResumeCard(); });
   renderResumeCard();
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && vs.lost && !vs.rejoining) rejoin(); });

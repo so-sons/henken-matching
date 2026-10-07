@@ -29,6 +29,16 @@ window.GAME_CONFIG = {
   // --- スタンプ（ルームチャットの上に並ぶ。押すと全員の画面に大きく出る） ---
   stamps: ["よろしく！", "www", "？？？", "やりますね！", "天才", "いい質問だね！", "ちょっと遠いかも・・・", "いい感じ！", "惜しい！", "次でラストで！", "もう一回！", "お疲れさまでした！"],
 
+  // --- Firebase（ルーム一覧・サイト内SNS）。この値はページに載せて公開してよいもの ---
+  firebase: {
+    apiKey: "AIzaSyD2CsbA2ic647i-142uJq0JdEDZfjVynGQ",
+    authDomain: "henken-matching.firebaseapp.com",
+    projectId: "henken-matching",
+    storageBucket: "henken-matching.firebasestorage.app",
+    messagingSenderId: "618334405476",
+    appId: "1:618334405476:web:533c526db86cbd1c4eb071",
+  },
+
   // --- ルール ---
   maxPlayers: 8,   // 複数人モードの最大人数（1対1は2人）
 };

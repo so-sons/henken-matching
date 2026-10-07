@@ -14,6 +14,8 @@ https://so-sons.github.io/henken-matching/
 - 利用規約・プライバシー：terms.html（お問い合わせ先は config.js の contact）
 - NGワード：ngwords.js（チャット・偏見・質問・お題・名前を「＊」で隠す）
 - SNS シェア用の画像：og.png（1200×630）。検索向けに robots.txt / sitemap.xml
+- ルーム一覧・サイト内SNS「みんなの試合」：Firebase（cloud.js・feed.js）。匿名ログイン＋Firestore。書き込みルールは firestore.rules（Firebase コンソールの Firestore → ルール に貼る）
+- プロフィール：profile.js（端末に保存し、ルームの参加者・フレンドに渡す）
 - 通信は PeerJS（WebRTC）。サーバー不要。静的ファイルだけで動きます
 
 ## 更新のしかた
