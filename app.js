@@ -145,7 +145,7 @@ window.GAME_START = () => {
   function openLobby(prefillCode) {
     showScreen("lobby");
     $("nickname").value = vs.name;
-    $("lobby-choice").hidden = false; $("lobby-room").hidden = true; $("lobby-match").hidden = false;
+    $("lobby-choice").hidden = false; $("lobby-room").hidden = true; $("lobby-match").hidden = false; $("room-list-card").hidden = !CFG.firebase;
     matchReset();
     $("join-code").value = prefillCode || "";
     lobbyStatus(peerAvailable() ? "" : "通信ライブラリを読み込めませんでした。ネットワーク環境を確認してください。");
@@ -155,6 +155,7 @@ window.GAME_START = () => {
   // ---- host
   function createRoom() {
     if (!peerAvailable()) { toast("通信ライブラリが読み込めていません"); return; }
+    leaveCurrentRoom();
     const name = myNick();
     lobbyStatus("ルームを作成中…");
     $("btn-create-room").disabled = true;
@@ -233,6 +234,14 @@ window.GAME_START = () => {
       const name = ng(String(msg.name || "プレイヤー").slice(0, 12));
       const code = validCode(msg.code);
       if (code && SOCIAL.isBlocked(code)) { hostSend(conn, { t: "error", msg: "このルームには参加できません", fatal: true }); setTimeout(() => { try { conn.close(); } catch {} }, 300); return; }
+      if (code && code === H.players[0].code) { hostSend(conn, { t: "error", msg: "あなたがホストのルームです（別の画面で開いています）", fatal: true }); setTimeout(() => { try { conn.close(); } catch {} }, 300); return; }
+      const dup = code ? H.players.findIndex((p, i) => i > 0 && p.connected && p.code === code) : -1;
+      if (dup > 0) {   // 同じ人（同じ端末）がもう一度入ってきた → 古いほうを外して1人分にする
+        const oc = H.players[dup].conn;
+        hostSend(oc, { t: "error", msg: "別の画面からこのルームに入り直したため、この画面は退出しました", fatal: true });
+        setTimeout(() => { try { oc.close(); } catch {} }, 300);
+        hostOnLeave(oc, true);
+      }
       H.players.push(Object.assign(newPlayer(name, conn, code), { profile: PROFILE.clean(msg.profile) }));
       H.profVer++;
       sendWelcome(H.players[H.players.length - 1], H.players.length - 1);
@@ -750,6 +759,7 @@ window.GAME_START = () => {
   }
   function startMatch() {
     if (!peerAvailable()) { toast("通信ライブラリが読み込めていません"); return; }
+    leaveCurrentRoom();
     myNick();
     matchGenre = cleanGenre($("match-genre").value);
     if (selectedRadio("matchmode", "duel") === "multi") { startMultiMatch(); return; }
@@ -1067,8 +1077,17 @@ window.GAME_START = () => {
     });
     peer.on("error", (e) => { clearTimeout(timeout); fail(e.type === "peer-unavailable" ? "そのコードのルームが見つかりません。" : "接続エラー: " + e.type); });
   }
+  // 別のルームへ行く前に、今いるルームからは退出する（同じルームに2回入ったり、2つのルームに同時にいたりしないように）
+  function leaveCurrentRoom() {
+    if (!vs.peer && !vs.code) return;
+    const code = vs.code;
+    leaveVersus();
+    $("lobby-room").hidden = true; $("lobby-choice").hidden = false; $("lobby-match").hidden = false; $("room-list-card").hidden = !CFG.firebase;
+    if (code) toast(`ルーム ${code} から退出しました`);
+  }
   function joinRoom() {
     if (!peerAvailable()) { toast("通信ライブラリが読み込めていません"); return; }
+    leaveCurrentRoom();
     const code = $("join-code").value.replace(/\D/g, "");
     if (code.length !== 6) { toast("6桁のコードを入力してください"); return; }
     const name = myNick();
@@ -1169,7 +1188,7 @@ window.GAME_START = () => {
 
   // ---- shared
   function enterRoomView() {
-    $("lobby-choice").hidden = true; $("lobby-room").hidden = false; $("lobby-match").hidden = true;
+    $("lobby-choice").hidden = true; $("lobby-room").hidden = false; $("lobby-match").hidden = true; $("room-list-card").hidden = true;
     $("room-code-display").textContent = vs.code;
     $("btn-start").hidden = !vs.isHost;
     lobbyStatus("");
