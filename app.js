@@ -979,7 +979,7 @@ window.GAME_START = () => {
     if (!force && key === cloudKey) return;
     cloudKey = key; cloudListedCode = vs.code;
     CLOUD.putRoom(data).catch((e) => console.warn("ルーム一覧に載せられませんでした", e));
-    if (!cloudBeat) cloudBeat = setInterval(() => cloudRoomSync(true), 30000);
+    if (!cloudBeat) cloudBeat = setInterval(() => cloudRoomSync(true), 20000);
   }
   function cloudRoomStop() {
     clearInterval(cloudBeat); cloudBeat = null; cloudKey = "";
@@ -1686,6 +1686,8 @@ window.GAME_START = () => {
   $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendChat(); } });
   $("setter-select").addEventListener("change", () => { if (vs.isHost) hostSetSetter(+$("setter-select").value); });
   window.addEventListener("beforeunload", () => { if (vs.isHost) saveHostSnap(); try { vs.peer && vs.peer.destroy(); } catch {} });
+  // ページを閉じるときは一覧から消す（間に合わなくても45秒で一覧に出なくなる）
+  window.addEventListener("pagehide", () => { if (cloudListedCode && window.CLOUD) CLOUD.removeRoom(cloudListedCode); });
 
   // ------------------------------------------------------------------ init
   applyConfigText();

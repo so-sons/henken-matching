@@ -13,7 +13,7 @@ try {
   const app = initializeApp(window.GAME_CONFIG.firebase);
   const auth = A.getAuth(app);
   const db = F.getFirestore(app);
-  const ROOM_FRESH_MS = 90 * 1000;
+  const ROOM_FRESH_MS = 45 * 1000;   // ホストは20秒ごとに書き直すので、45秒更新がなければ閉じたとみなす
 
   // 匿名ログイン（前回のIDが残っていればそれを使う）
   let uidP = null;
@@ -44,7 +44,7 @@ try {
   }
   async function listRooms() {
     const since = F.Timestamp.fromMillis(Date.now() - ROOM_FRESH_MS);
-    const q = F.query(F.collection(db, "rooms"), F.where("updatedAt", ">", since), F.orderBy("updatedAt", "desc"), F.limit(50));
+    const q = F.query(F.collection(db, "rooms"), F.where("updatedAt", ">", since), F.orderBy("updatedAt", "desc"), F.limit(200));
     const snap = await F.getDocs(q);
     return snap.docs.map((d) => d.data());
   }
